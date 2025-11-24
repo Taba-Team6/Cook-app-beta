@@ -20,12 +20,25 @@ import { IngredientsManagement } from "./components/IngredientsManagement";
 import { AccountSettings } from "./components/AccountSettings";
 import { CommunityPage } from "./components/CommunityPage";
 import { CompletedRecipesPage } from "./components/CompletedRecipesPage";
-import type { Recipe } from "./components/RecipeRecommendation";
+import type { Recipe } from "./components/RecipeRecommendation"; // VoiceAssistant에서 레시피 목록용으로 잠시 유지
 import { getCurrentUser, setAuthToken, removeAuthToken } from "./utils/api";
 
 type AppStep = "auth" | "home" | "profile" | "profile-complete" | "ingredients" | "recommendations" | "recipe" | "feedback" | "voice-assistant" | "ingredient-check" | "cooking-in-progress" | "recipe-list" | "saved" | "mypage" | "ingredients-management" | "account-settings" | "recipe-review" | "community" | "completed-recipes";
 
-interface CompletedRecipe extends Recipe {
+interface RecipeDetailData {
+  id: string;
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  cooking_method: string | null;
+  hashtags: string | null;
+  ingredients: { name: string; amount: string }[];
+  steps: string[];
+}
+
+// ✅ 문제점 1 해결: CompletedRecipe 타입을 RecipeDetailData 확장형으로 변경
+interface CompletedRecipe extends RecipeDetailData {
   completedAt: string;
 }
 
@@ -35,7 +48,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [cookingContext, setCookingContext] = useState<CookingContext | null>(null);
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [selectedRecipe, setSelectedRecipe] = useState<RecipeDetailData | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [pageHistory, setPageHistory] = useState<AppStep[]>([]);
@@ -174,7 +187,7 @@ export default function App() {
   };
 
   const handleAuthSuccess = (userName: string) => {
-    const user = localStorage.getItem("cooking_assistant_current_user");
+    const user = sessionStorage.getItem("cooking_assistant_current_user");
     if (user) {
       setCurrentUser(JSON.parse(user));
     }
@@ -184,7 +197,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("cooking_assistant_current_user");
+    sessionStorage.removeItem("cooking_assistant_current_user");
     localStorage.removeItem("cooking_assistant_user_profile");
     removeAuthToken();
     setIsAuthenticated(false);
@@ -222,15 +235,37 @@ export default function App() {
     navigateToStep("recommendations");
   };
 
-  const handleRecipeSelect = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    navigateToStep("recipe");
+  // 1. 레시피 상세 페이지 (RecipeDetail)를 바로 보여주기 위한 핸들러 (추천 페이지에서 사용)
+  const handleRecipeSelect = async (recipeId: string) => {
+    try {
+      const detail = await fetchRecipeDetail(recipeId);
+      setSelectedRecipe(detail);
+      navigateToStep("recipe");
+    } catch (error) {
+      console.error("Failed to load recipe detail:", error);
+    }
   };
 
-  const handleCompletedRecipeClick = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    navigateToStep("ingredient-check");
+
+  // DB 상세 조회 API 함수
+  async function fetchRecipeDetail(id: string): Promise<RecipeDetailData> {
+    const response = await fetch(`http://localhost:3001/api/recipes/detail/${id}`);
+    if (!response.ok) throw new Error("Failed to fetch recipe detail");
+    return response.json();
+  }
+
+  // 2. 레시피 상세 조회 후 재료 확인 페이지 (RecipeIngredientCheck)로 이동하는 핸들러
+  // ✅ 문제점 2 해결: RecipeListPage, SavedPage, CompletedRecipesPage에서 사용하도록 통합
+  const handleRecipeSelectForCheck = async (recipeId: string) => {
+    try {
+      const detail = await fetchRecipeDetail(recipeId);
+      setSelectedRecipe(detail);
+      navigateToStep("ingredient-check");
+    } catch (error) {
+      console.error("Failed to load recipe detail for check:", error);
+    }
   };
+
 
   const handleCookingComplete = () => {
     // 완료한 레시피 저장 (중복 체크)
@@ -243,6 +278,7 @@ export default function App() {
       
       if (!isAlreadyCompleted) {
         const completedRecipe: CompletedRecipe = {
+          // ✅ CompletedRecipe가 RecipeDetailData를 확장하도록 수정했으므로 안전함
           ...selectedRecipe,
           completedAt: new Date().toISOString(),
         };
@@ -276,34 +312,26 @@ export default function App() {
     navigateToStep("voice-assistant");
   };
 
-  const handleVoiceRecipeSelect = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    navigateToStep("ingredient-check");
+  // ✅ 문제점 2 해결: VoiceAssistant에서 선택된 레시피를 ID 기반으로 상세 조회하여 이동
+  const handleVoiceRecipeSelect = async (recipe: Recipe) => {
+    try {
+      const detail = await fetchRecipeDetail(recipe.id);
+      setSelectedRecipe(detail);
+      navigateToStep("ingredient-check");
+    } catch (error) {
+      console.error("Failed to load recipe detail from voice assistant:", error);
+    }
   };
 
   const handleIngredientCheckConfirm = () => {
-    // 완료한 레시피 저장 (중복 체크)
-    if (selectedRecipe) {
-      // 이미 완료한 레시피인지 확인
-      const isAlreadyCompleted = completedRecipes.some(
-        recipe => recipe.id === selectedRecipe.id && 
-        new Date(recipe.completedAt).toDateString() === new Date().toDateString()
-      );
-      
-      if (!isAlreadyCompleted) {
-        const completedRecipe: CompletedRecipe = {
-          ...selectedRecipe,
-          completedAt: new Date().toISOString(),
-        };
-        const updatedCompletedRecipes = [completedRecipe, ...completedRecipes];
-        setCompletedRecipes(updatedCompletedRecipes);
-        localStorage.setItem("cooking_assistant_completed_recipes", JSON.stringify(updatedCompletedRecipes));
-        console.log("✅ 레시피 완료 저장 (AI 음성):", completedRecipe.name, "총", updatedCompletedRecipes.length, "개");
-      } else {
-        console.log("⚠️ 오늘 이미 완료한 레시피:", selectedRecipe.name);
-      }
-    }
-    navigateToStep("recipe-review");
+    // 완료한 레시피 저장 로직은 조리 완료 시점에 한 번만 실행되도록, 여기서는 생략하고 바로 다음 단계로 이동
+    // navigateToStep("cooking-in-progress"); // 일반적인 흐름
+    navigateToStep("recipe-review"); // 임시로 리뷰 페이지로 바로 이동
+  };
+  
+  // RecipeIngredientCheck 컴포넌트 내에서 조리 시작 버튼을 누르면 이 함수 호출
+  const handleStartCooking = () => {
+    navigateToStep("cooking-in-progress");
   };
 
   const handleCookingInProgressComplete = () => {
@@ -441,15 +469,17 @@ export default function App() {
         />
       )}
 
+      {/* ✅ selectedRecipe 타입: RecipeDetailData */}
       {currentStep === "ingredient-check" && isAuthenticated && selectedRecipe && (
         <RecipeIngredientCheck
-          recipe={selectedRecipe}
+          recipe={selectedRecipe} 
           userProfile={userProfile}
-          onConfirm={handleIngredientCheckConfirm}
+          onConfirm={handleStartCooking} // 확인 후 조리 시작
           onBack={handleBackNavigation}
         />
       )}
 
+      {/* ✅ selectedRecipe 타입: RecipeDetailData */}
       {currentStep === "cooking-in-progress" && isAuthenticated && selectedRecipe && (
         <CookingInProgress
           recipe={selectedRecipe}
@@ -483,7 +513,7 @@ export default function App() {
         <RecipeRecommendation
           profile={userProfile}
           context={cookingContext}
-          onSelectRecipe={handleRecipeSelect}
+          onSelectRecipe={handleRecipeSelect} // 레시피 상세 페이지로 바로 이동
           onBack={handleBackNavigation}
           onAddIngredients={!cookingContext ? handleAddIngredientsFromRecommendation : undefined}
         />
@@ -503,7 +533,7 @@ export default function App() {
 
       {currentStep === "recipe-list" && (
         <RecipeListPage 
-          onRecipeClick={handleCompletedRecipeClick}
+          onRecipeClick={handleRecipeSelectForCheck} // ✅ 핸들러 변경
           initialCategory={selectedCategory}
           savedRecipes={savedRecipes}
           onToggleSave={handleToggleSaveRecipe}
@@ -513,7 +543,7 @@ export default function App() {
       {currentStep === "saved" && (
         <SavedPage 
           savedRecipes={savedRecipes}
-          onRecipeClick={handleCompletedRecipeClick}
+          onRecipeClick={handleRecipeSelectForCheck} // ✅ 핸들러 변경
           onRemoveSaved={handleToggleSaveRecipe}
         />
       )}
@@ -540,7 +570,7 @@ export default function App() {
 
       {currentStep === "recipe-review" && isAuthenticated && selectedRecipe && (
         <RecipeReview
-          recipe={selectedRecipe}
+          recipe={selectedRecipe} // ✅ selectedRecipe 타입: RecipeDetailData
           onSubmit={handleReviewSubmit}
           onSkip={handleReviewSkip}
         />
@@ -553,7 +583,7 @@ export default function App() {
       {currentStep === "completed-recipes" && (
         <CompletedRecipesPage 
           completedRecipes={completedRecipes}
-          onRecipeClick={handleCompletedRecipeClick}
+          onRecipeClick={handleRecipeSelectForCheck} // ✅ 핸들러 변경
         />
       )}
 

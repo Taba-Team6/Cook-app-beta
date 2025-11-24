@@ -107,7 +107,7 @@ export function toLightRecipe(recipe) {
     category: recipe.RCP_PAT2 || '기타',
     cooking_method: recipe.RCP_WAY2 || null,
     hashtags: recipe.HASH_TAG || null,
-    ingredients_length: (recipe.RCP_PARTS_DTLS || '').length
+    ingredients_count: (recipe.RCP_PARTS_DTLS || '').length
   };
 }
 

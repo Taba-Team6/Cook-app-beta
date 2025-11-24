@@ -82,7 +82,7 @@ CREATE TABLE recipes_light (
     category VARCHAR(50),
     cooking_method VARCHAR(50),
     hashtags TEXT,
-    ingredients_length INT DEFAULT 0,
+    ingredients_count INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name),

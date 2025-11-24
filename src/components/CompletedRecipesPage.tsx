@@ -9,27 +9,22 @@ interface CompletedRecipe extends Recipe {
 
 interface CompletedRecipesPageProps {
   completedRecipes: CompletedRecipe[];
-  onRecipeClick?: (recipe: Recipe) => void;
+  onRecipeClick?: (id: string) => void;      // ← 수정됨
 }
 
 export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: CompletedRecipesPageProps) {
+  
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
-    if (diffDays === 0) {
-      return "오늘";
-    } else if (diffDays === 1) {
-      return "어제";
-    } else if (diffDays < 7) {
-      return `${diffDays}일 전`;
-    } else if (diffDays < 30) {
-      return `${Math.floor(diffDays / 7)}주 전`;
-    } else {
-      return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-    }
+    if (diffDays === 0) return "오늘";
+    else if (diffDays === 1) return "어제";
+    else if (diffDays < 7) return `${diffDays}일 전`;
+    else if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
+    else return date.toLocaleDateString("ko-KR");
   };
 
   return (
@@ -63,7 +58,11 @@ export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: Comple
               <Card
                 key={`${recipe.id}-${index}`}
                 className="hover:border-primary/40 transition-all cursor-pointer"
-                onClick={() => onRecipeClick?.(recipe)}
+
+                // ----------------------------------------------------
+                // 수정: recipe 전체 객체가 아니라 recipe.id만 전달
+                // ----------------------------------------------------
+                onClick={() => onRecipeClick?.(recipe.id)}
               >
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
@@ -74,9 +73,11 @@ export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: Comple
                           완료
                         </Badge>
                       </div>
+
                       <p className="text-sm text-muted-foreground mb-3">
                         {recipe.description}
                       </p>
+
                       <div className="flex flex-wrap gap-2 mb-3">
                         {recipe.tags?.map((tag) => (
                           <Badge key={tag} variant="secondary">
@@ -84,6 +85,7 @@ export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: Comple
                           </Badge>
                         ))}
                       </div>
+
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4" />
@@ -100,12 +102,12 @@ export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: Comple
                       </div>
                     </div>
                   </div>
+
                   <div className="flex items-center gap-2 mt-3 pt-3 border-t">
                     <ChefHat className="w-4 h-4 text-primary" />
-                    <span className="text-sm text-primary">
-                      {formatDate(recipe.completedAt)}
-                    </span>
+                    <span className="text-sm text-primary">{formatDate(recipe.completedAt)}</span>
                   </div>
+
                 </CardHeader>
               </Card>
             ))}

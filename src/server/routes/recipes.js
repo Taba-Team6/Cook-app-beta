@@ -15,12 +15,18 @@ router.get('/public', async (req, res) => {
     const rawLimit = req.query.limit;
     const rawOffset = req.query.offset;
 
-    const limit = Number.isInteger(parseInt(rawLimit)) ? parseInt(rawLimit) : 50;
-    const offset = Number.isInteger(parseInt(rawOffset)) ? parseInt(rawOffset) : 0;
+    // 정수로 강제 변환
+    const limitParsed = parseInt(rawLimit, 10);
+    const offsetParsed = parseInt(rawOffset, 10);
+
+    // NaN이면 기본값 설정
+    const limit = Number.isNaN(limitParsed) ? 50 : limitParsed;
+    const offset = Number.isNaN(offsetParsed) ? 0 : offsetParsed;
+
 
     const { category, search } = req.query;
 
-    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_length 
+    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count 
                     FROM recipes_light 
                     WHERE (category IS NOT NULL AND category != '')`;
     const params = [];
@@ -35,8 +41,7 @@ router.get('/public', async (req, res) => {
       params.push(`%${search}%`);
     }
 
-    queryStr += ' ORDER BY name ASC LIMIT ? OFFSET ?';
-    params.push(limit, offset);
+    queryStr += ` ORDER BY name ASC LIMIT ${limit} OFFSET ${offset}`;
 
     console.log(`[Public Recipes] Query: ${queryStr}`);
     console.log(`[Public Recipes] Params:`, params);

@@ -7,7 +7,7 @@ import type { Recipe } from "./RecipeListPage";
 
 interface SavedPageProps {
   savedRecipes?: Recipe[];
-  onRecipeClick?: (recipe: Recipe) => void;
+  onRecipeClick?: (id: string) => void;     // ← 수정됨
   onRemoveSaved?: (recipe: Recipe) => void;
 }
 
@@ -29,7 +29,11 @@ export function SavedPage({ savedRecipes = [], onRecipeClick, onRemoveSaved }: S
               <Card
                 key={recipe.id}
                 className="overflow-hidden hover:shadow-lg transition-all cursor-pointer"
-                onClick={() => onRecipeClick?.(recipe)}
+
+                // -----------------------------------------------
+                // 수정: recipe → recipe.id 전달
+                // -----------------------------------------------
+                onClick={() => onRecipeClick?.(recipe.id)}
               >
                 <div className="aspect-video relative bg-muted">
                   <ImageWithFallback
