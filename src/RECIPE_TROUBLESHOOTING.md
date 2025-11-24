@@ -150,7 +150,7 @@ curl "http://localhost:3001/api/recipes/public?limit=20"
       "category": "밥",
       "cooking_method": "볶음",
       "hashtags": "#김치 #볶음밥",
-      "ingredients_length": 150
+      "ingredients_count": 150
     }
   ],
   "total": 20,

@@ -280,7 +280,7 @@ CREATE TABLE recipes_light (
     category VARCHAR(50),                 -- 카테고리 (반찬/국/밥 등)
     cooking_method VARCHAR(50),           -- 조리 방법 (볶음/찜 등)
     hashtags TEXT,                        -- 해시태그
-    ingredients_length INT,               -- 재료 텍스트 길이
+    ingredients_count INT,               -- 재료 텍스트 길이
     created_at TIMESTAMP,
     updated_at TIMESTAMP
 );
