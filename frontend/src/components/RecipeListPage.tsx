@@ -24,9 +24,13 @@ interface RecipeListPageProps {
   initialCategory?: string;
   savedRecipes?: Recipe[];
   onToggleSave?: (recipe: Recipe) => void;
+
+  // 🔥 추가: 메뉴 바로가기용 완료 레시피들 + 클릭 핸들러
+  quickRecipes?: Recipe[];
+  onQuickRecipeClick?: (recipe: Recipe) => void;
 }
 
-export function RecipeListPage({ onRecipeClick, initialCategory = "전체", savedRecipes = [], onToggleSave }: RecipeListPageProps) {
+export function RecipeListPage({ onRecipeClick, initialCategory = "전체", savedRecipes = [], onToggleSave, quickRecipes = [], onQuickRecipeClick, }: RecipeListPageProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>(initialCategory);
 
   // initialCategory가 변경되면 selectedCategory 업데이트
@@ -221,6 +225,7 @@ export function RecipeListPage({ onRecipeClick, initialCategory = "전체", save
             ))}
           </div>
         </div>
+
 
         {/* 레시피 목록 */}
         <div>

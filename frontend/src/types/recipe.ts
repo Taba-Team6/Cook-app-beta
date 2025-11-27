@@ -1,6 +1,8 @@
 // src/types/recipe.ts
 
 export interface Recipe {
+  recipeName? : string;
+  fullIngredients?: string[];
   id: string;
   name: string;
   description: string;

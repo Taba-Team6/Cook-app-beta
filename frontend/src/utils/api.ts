@@ -152,30 +152,32 @@ export async function textToSpeech(text: string) {
 // GPT API
 // ============================================
 
-export async function askGPT_raw(message: string) {
+export async function askGPT_raw(data: { message: string; profile: any }) {
   const response = await fetch("http://localhost:4000/api/ai/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify(data),
   });
 
-  const data = await response.json();
-  return data.reply; // JSON 문자열
+  const result = await response.json();
+  return result.reply;
 }
+
 
 //============================================
 // gpt followup (레시피 + 대화 동시 업데이트)
 //============================================
-export async function askCookingFollowup(recipe: any, question: string) {
+export async function askCookingFollowup(recipe: any, question: string, profile: any) {
   const response = await fetch("http://localhost:4000/api/ai/followup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipe, question }),
+    body: JSON.stringify({ recipe, question, profile }),
   });
 
   const data = await response.json();
-  return data;  // 🔥 이제 { assistantMessage, recipe } 그대로 반환
+  return data;
 }
+
 
 
 

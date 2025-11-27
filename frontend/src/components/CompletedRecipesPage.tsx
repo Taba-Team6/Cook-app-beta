@@ -1,40 +1,69 @@
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { ChefHat, Clock, User } from "lucide-react";
-import type { Recipe } from "./RecipeRecommendation";
+import { ImageWithFallback } from "./figma/ImageWithFallback";
+import type { Recipe } from "../types/recipe";
+
+// GPT가 준 이미지가 "예시용" 혹은 이상한지 판단
+const isPlaceholderImage = (url?: string) => {
+  if (!url) return true;
+
+  // GPT 프롬프트에 넣어둔 예시 URL을 그대로 쓰는 경우 방지
+  if (url.includes("photo-1604908176997-1251884b08a3")) return true;
+
+  // 필요하면 이런 패턴들 더 추가 가능
+  // if (url.includes("some-other-sample-id")) return true;
+
+  return false;
+};
+
+// 레시피 이름으로 Unsplash 대표 이미지 생성
+const buildImageFromTitle = (title: string) => {
+  // 제목 기반으로 검색 태그 구성 (한식/요리/food 등)
+  const query = encodeURIComponent(`${title}, 음식, 요리, food, dish`);
+  return `https://source.unsplash.com/featured/?${query}`;
+};
 
 interface CompletedRecipe extends Recipe {
   completedAt: string;
+  // GPT용 필드
 }
 
 interface CompletedRecipesPageProps {
   completedRecipes: CompletedRecipe[];
-  onRecipeClick?: (recipe: Recipe) => void;
+  onRecipeClick?: (recipe: CompletedRecipe) => void;
 }
 
-export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: CompletedRecipesPageProps) {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      return "오늘";
-    } else if (diffDays === 1) {
-      return "어제";
-    } else if (diffDays < 7) {
-      return `${diffDays}일 전`;
-    } else if (diffDays < 30) {
-      return `${Math.floor(diffDays / 7)}주 전`;
-    } else {
-      return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' });
-    }
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - date.getTime());
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return "오늘";
+  if (diffDays === 1) return "어제";
+  if (diffDays < 7) return `${diffDays}일 전`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
+  return date.toLocaleDateString("ko-KR");
+};
+
+export function CompletedRecipesPage({
+  completedRecipes,
+  onRecipeClick,
+}: CompletedRecipesPageProps) {
+  const fallbackImage =
+    "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=225&fit=crop";
+  
+  const buildImageFromTitle = (title: string) => {
+    const query = encodeURIComponent(`${title}, 음식, 요리, food, dish`);
+    return `https://source.unsplash.com/featured/?${query}`;
   };
+
 
   return (
     <div className="min-h-screen bg-background pt-20 pb-24">
       <div className="max-w-4xl mx-auto px-4 py-8">
+        {/* 상단 헤더 */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
@@ -47,6 +76,7 @@ export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: Comple
           </p>
         </div>
 
+        {/* 비어 있을 때 */}
         {completedRecipes.length === 0 ? (
           <Card>
             <CardContent className="pt-6 text-center py-12">
@@ -59,56 +89,88 @@ export function CompletedRecipesPage({ completedRecipes, onRecipeClick }: Comple
           </Card>
         ) : (
           <div className="space-y-4">
-            {completedRecipes.map((recipe, index) => (
-              <Card
-                key={`${recipe.id}-${index}`}
-                className="hover:border-primary/40 transition-all cursor-pointer"
-                onClick={() => onRecipeClick?.(recipe)}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-4">
+            {completedRecipes.map((recipe, index) => {
+              const title =
+                recipe.name || recipe.recipeName || "이름 없는 레시피";
+
+              let imageSrc: string;
+
+              if (recipe.image && recipe.image.startsWith("http")) {
+                imageSrc = recipe.image;
+              } else if (title && title !== "이름 없는 레시피") {
+                imageSrc = buildImageFromTitle(title);
+              } else {
+                imageSrc = fallbackImage;
+              }
+
+              return (
+                <Card
+                  key={`${title}-${recipe.completedAt}-${index}`}
+                  className="hover:border-primary/40 transition-all cursor-pointer"
+                  onClick={() => onRecipeClick?.(recipe)}
+                >
+                  <div className="flex">
+                    {/* 왼쪽 요리 사진 */}
+                    <div className="w-28 h-24 rounded-l-xl overflow-hidden bg-muted">
+                      <ImageWithFallback
+                        src={imageSrc}
+                        alt={title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    {/* 오른쪽 정보 */}
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <CardTitle className="text-lg">{recipe.name}</CardTitle>
-                        <Badge variant="outline" className="bg-primary/5">
-                          완료
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {recipe.description}
-                      </p>
-                      <div className="flex flex-wrap gap-2 mb-3">
-                        {recipe.tags?.map((tag) => (
-                          <Badge key={tag} variant="secondary">
-                            {tag}
+                      <CardHeader className="pb-2">
+                        <div className="flex items-start justify-between gap-2">
+                          {/* 🔥 메뉴 이름만 */}
+                          <CardTitle className="text-lg line-clamp-1">
+                            {title}
+                          </CardTitle>
+                          <Badge variant="outline" className="bg-primary/5">
+                            완료
                           </Badge>
-                        ))}
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>{recipe.cookingTime}</span>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <User className="w-4 h-4" />
-                          <span>{recipe.servings}</span>
+                      </CardHeader>
+
+                      <CardContent className="pt-0 pb-3">
+                        {/* 시간/인분/난이도는 있을 때만 보여주기 (없으면 깔끔히 숨김) */}
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          {recipe.cookingTime && (
+                            <div className="flex items-center gap-1">
+                              <Clock className="w-4 h-4" />
+                              <span>
+                                {typeof recipe.cookingTime === "number"
+                                  ? `${recipe.cookingTime}분`
+                                  : recipe.cookingTime}
+                              </span>
+                            </div>
+                          )}
+
+                          {recipe.servings && (
+                            <div className="flex items-center gap-1">
+                              <User className="w-4 h-4" />
+                              <span>{recipe.servings}</span>
+                            </div>
+                          )}
+                          {recipe.difficulty && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs">🔥</span>
+                              <span>{recipe.difficulty}</span>
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs">🔥</span>
-                          <span>{recipe.difficulty}</span>
+
+                        <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                          <ChefHat className="w-4 h-4 text-primary" />
+                          <span>{formatDate(recipe.completedAt)}</span>
                         </div>
-                      </div>
+                      </CardContent>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-3 pt-3 border-t">
-                    <ChefHat className="w-4 h-4 text-primary" />
-                    <span className="text-sm text-primary">
-                      {formatDate(recipe.completedAt)}
-                    </span>
-                  </div>
-                </CardHeader>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

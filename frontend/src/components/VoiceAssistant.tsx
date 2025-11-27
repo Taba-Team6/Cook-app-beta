@@ -10,10 +10,13 @@ import { askGPT_raw, speechToText, askCookingFollowup } from "../utils/api";
 import type { Recipe } from "../types/recipe";
 import { speakText, stopSpeaking } from "../utils/tts";
 import { Progress } from "./ui/progress";
+import type { UserProfile } from "./ProfileSetup";
 
 interface VoiceAssistantProps {
   onRecipeSelect: (recipe: Recipe) => void;
   onBack: () => void;
+  initialRecipe?: Recipe | null;
+  userProfile: UserProfile | null;   // ⭐ 추가
 }
 
 interface ChatMessage {
@@ -28,13 +31,14 @@ interface FollowupResult {
   recipe: Recipe;
 }
 
-export function VoiceAssistant({ onRecipeSelect, onBack }: VoiceAssistantProps) {
+
+export function VoiceAssistant({ onRecipeSelect, onBack, initialRecipe, userProfile }: VoiceAssistantProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [textInput, setTextInput] = useState("");
 
-  const [recipeInfo, setRecipeInfo] = useState<Recipe | null>(null);
+  const [recipeInfo, setRecipeInfo] = useState<Recipe | null>(initialRecipe ?? null);
   const [ingredientsChecked, setIngredientsChecked] = useState(false);
   const [cookingStarted, setCookingStarted] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -49,6 +53,28 @@ export function VoiceAssistant({ onRecipeSelect, onBack }: VoiceAssistantProps) 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+  // 처음에 초기 레시피로 들어온 경우
+  if (initialRecipe) {
+    setRecipeInfo(initialRecipe);
+    setIngredientsChecked(false);
+    setCookingStarted(false);
+    setCurrentStepIndex(0);
+    setCompletedSteps([]);
+    setIsFinished(false);
+
+    const ingredientsText = initialRecipe.fullIngredients?.join("\n") ?? "";
+    if (ingredientsText) {
+      addMessage(
+        `${initialRecipe.recipeName ?? ""} 재료 목록입니다:\n${ingredientsText}\n\n빠진 재료가 있으면 말해주세요!`,
+        "assistant"
+      );
+    }
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initialRecipe]);
+
 
   const totalSteps = recipeInfo?.steps?.length ?? 0;
   const completedCount = completedSteps.length;
@@ -101,7 +127,10 @@ export function VoiceAssistant({ onRecipeSelect, onBack }: VoiceAssistantProps) 
     // (1) 레시피 최초 생성
     if (!recipeInfo) {
       try {
-        const json = await askGPT_raw(text);
+        const json = await askGPT_raw({
+          message: text,
+          profile: userProfile,
+        });
         const info = JSON.parse(json);
 
         if (!info.steps || !info.fullIngredients) throw new Error();
@@ -135,7 +164,7 @@ export function VoiceAssistant({ onRecipeSelect, onBack }: VoiceAssistantProps) 
       }
 
       try {
-        const result: FollowupResult = await askCookingFollowup(nowRecipe, text);
+        const result: FollowupResult = await askCookingFollowup(nowRecipe, text, userProfile);
         setRecipeInfo(result.recipe);
         addMessage(result.assistantMessage, "assistant");
       } catch {
@@ -187,7 +216,7 @@ export function VoiceAssistant({ onRecipeSelect, onBack }: VoiceAssistantProps) 
 
     // (5) 진행 중 질문
     try {
-      const result: FollowupResult = await askCookingFollowup(nowRecipe, text);
+      const result: FollowupResult = await askCookingFollowup(nowRecipe, text, userProfile);
       setRecipeInfo(result.recipe);
       addMessage(result.assistantMessage, "assistant");
     } catch {

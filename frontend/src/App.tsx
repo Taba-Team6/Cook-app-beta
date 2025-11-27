@@ -45,6 +45,9 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>("전체");
   const [savedRecipes, setSavedRecipes] = useState<RecipeListRecipe[]>([]);
 
+  const [quickRecipes, setQuickRecipes] = useState<Recipe[]>([]); // 레시피창 상단 메뉴 바로가기용
+  const [voiceInitialRecipe, setVoiceInitialRecipe] = useState<Recipe | null>(null); // AI 조리 시작 시 사용할 레시피
+
   // Check if user has an active session
   useEffect(() => {
     const checkSession = async () => {
@@ -254,6 +257,24 @@ export default function App() {
     navigateToStep("ingredient-check");
   };
 
+  // 🔥 완료한 요리에서 "메뉴 바로가기" 흐름용
+  const handleCompletedRecipeQuickNav = (recipe: Recipe) => {
+    // 1) 메뉴 바로가기 목록에 추가
+    setQuickRecipes((prev) => {
+      const exists = prev.some(
+        (r) => (r.id && r.id === recipe.id) || r.recipeName === recipe.recipeName
+      );
+      return exists ? prev : [recipe, ...prev];
+    });
+
+    // 2) 나중에 VoiceAssistant 시작할 때 이 레시피로 시작할 수 있게 저장
+    setVoiceInitialRecipe(recipe);
+
+    // 3) 레시피 목록 페이지로 이동 (여기서 상단에 메뉴 바로가기 버튼이 보이게 됨)
+    navigateToStep("voice-assistant");
+  };
+
+
   const handleCookingComplete = () => {
     // 완료한 레시피 저장 (중복 체크)
     if (selectedRecipe) {
@@ -295,13 +316,49 @@ export default function App() {
   };
 
   const handleVoiceAssistant = () => {
+    setVoiceInitialRecipe(null);
     navigateToStep("voice-assistant");
   };
 
   const handleVoiceRecipeSelect = (recipe: Recipe) => {
-    setSelectedRecipe(recipe);
-    navigateToStep("recipe-review");  // 🔥 여기만 변경
-  };
+  setSelectedRecipe(recipe);
+
+  // ✅ 1) 완료한 요리에 추가 (오늘 이미 완료했다면 중복 방지)
+  const todayStr = new Date().toDateString();
+  const isAlreadyCompleted = completedRecipes.some(
+    (r) =>
+      (r.id && r.id === recipe.id) || // id가 있으면 id 기준
+      (r.recipeName === recipe.recipeName && new Date(r.completedAt).toDateString() === todayStr)
+  );
+
+  if (!isAlreadyCompleted) {
+    const completedRecipe: CompletedRecipe = {
+      ...recipe,
+      completedAt: new Date().toISOString(),
+    };
+    const updated = [completedRecipe, ...completedRecipes];
+    setCompletedRecipes(updated);
+    localStorage.setItem(
+      "cooking_assistant_completed_recipes",
+      JSON.stringify(updated)
+    );
+    console.log("✅ 레시피 완료 저장 (AI 음성):", completedRecipe.recipeName || completedRecipe.name);
+  } else {
+    console.log("⚠️ 오늘 이미 완료한 레시피 (AI 음성):", recipe.recipeName || recipe.name);
+  }
+
+  // ✅ 2) 레시피창 상단 메뉴 바로가기 버튼 목록에도 추가
+  setQuickRecipes((prev) => {
+    const exists = prev.some(
+      (r) => (r.id && r.id === recipe.id) || r.recipeName === recipe.recipeName
+    );
+    return exists ? prev : [recipe, ...prev];
+  });
+
+  // ✅ 3) 요리 끝나고 나서 리뷰 페이지로 이동 (기존 흐름 유지)
+  navigateToStep("recipe-review");
+};
+
 
   const handleIngredientCheckConfirm = () => {
     // 완료한 레시피 저장 (중복 체크)
@@ -417,6 +474,13 @@ export default function App() {
   // 뒤로가기 버튼 표시 여부 결정
   const shouldShowBackButton = currentStep !== "home" && currentStep !== "auth";
 
+  // 🔥 레시피창 상단 메뉴 바로가기 버튼 클릭 → AI 조리 단계로 진입
+  const handleQuickRecipeStart = (recipe: Recipe) => {
+    setVoiceInitialRecipe(recipe);
+    navigateToStep("voice-assistant");
+  };
+
+
   return (
     <div className="min-h-screen bg-background">
       {/* 상단 네비게이션 바 */}
@@ -460,6 +524,8 @@ export default function App() {
         <VoiceAssistant 
           onRecipeSelect={handleVoiceRecipeSelect}
           onBack={handleBackNavigation}
+          initialRecipe={voiceInitialRecipe}
+          userProfile={userProfile}   // ⭐ 추가됨
         />
       )}
 
@@ -529,6 +595,8 @@ export default function App() {
           initialCategory={selectedCategory}
           savedRecipes={savedRecipes}
           onToggleSave={handleToggleSaveRecipe}
+          quickRecipes={quickRecipes}
+          onQuickRecipeClick={handleQuickRecipeStart}
         />
       )}
 
@@ -575,7 +643,7 @@ export default function App() {
       {currentStep === "completed-recipes" && (
         <CompletedRecipesPage 
           completedRecipes={completedRecipes}
-          onRecipeClick={handleCompletedRecipeClick}
+          onRecipeClick={handleCompletedRecipeQuickNav}
         />
       )}
 
