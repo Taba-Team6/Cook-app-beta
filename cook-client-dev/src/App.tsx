@@ -4,12 +4,12 @@ import { HomePage } from "./components/HomePage";
 import { ProfileSetup, UserProfile } from "./components/ProfileSetup";
 import { ProfileComplete } from "./components/ProfileComplete";
 import { IngredientsInput, CookingContext } from "./components/IngredientsInput";
-import { RecipeRecommendation } from "./components/RecipeRecommendation";
-import { RecipeDetail } from "./components/RecipeDetail";
+//import { RecipeRecommendation } from "./components/RecipeRecommendation";
+//import { RecipeDetail } from "./components/RecipeDetail";
 import { Feedback } from "./components/Feedback";
 import { VoiceAssistant } from "./components/VoiceAssistant";
-import { RecipeIngredientCheck } from "./components/RecipeIngredientCheck";
-import { CookingInProgress } from "./components/CookingInProgress";
+//import { RecipeIngredientCheck } from "./components/RecipeIngredientCheck";
+//import { CookingInProgress } from "./components/CookingInProgress";
 import { RecipeReview } from "./components/RecipeReview";
 import { TopNavBar } from "./components/TopNavBar";
 import { BottomNavBar } from "./components/BottomNavBar";
@@ -21,7 +21,7 @@ import { IngredientsManagement } from "./components/IngredientsManagement";
 import { AccountSettings } from "./components/AccountSettings";
 import { CommunityPage } from "./components/CommunityPage";
 import { CompletedRecipesPage } from "./components/CompletedRecipesPage";
-import type { Recipe } from "./components/RecipeRecommendation"; // VoiceAssistant에서 레시피 목록용으로 잠시 유지
+//import type { Recipe } from "./components/RecipeRecommendation"; // VoiceAssistant에서 레시피 목록용으로 잠시 유지
 import { getCurrentUser, setAuthToken, removeAuthToken } from "./utils/api";
 
 type AppStep = "auth" | "home" | "profile" | "profile-complete" | "ingredients" | "recommendations" | "recipe" | "feedback" | "voice-assistant" | "ingredient-check" | "cooking-in-progress" | "recipe-list" | "saved" | "mypage" | "ingredients-management" | "account-settings" | "recipe-review" | "community" | "completed-recipes";
@@ -340,18 +340,18 @@ export default function App() {
   };
 
 
-  const handleIngredientCheckConfirm = () => {
+  /*const handleIngredientCheckConfirm = () => {
     // 완료한 레시피 저장 로직은 조리 완료 시점에 한 번만 실행되도록, 여기서는 생략하고 바로 다음 단계로 이동
     // navigateToStep("cooking-in-progress"); // 일반적인 흐름
     navigateToStep("recipe-review"); // 임시로 리뷰 페이지로 바로 이동
-  };
+  };*/
   
   // RecipeIngredientCheck 컴포넌트 내에서 조리 시작 버튼을 누르면 이 함수 호출
-  const handleStartCooking = () => {
+  /*const handleStartCooking = () => {
     navigateToStep("cooking-in-progress");
-  };
+  };*/
 
-  const handleCookingInProgressComplete = () => {
+  /*const handleCookingInProgressComplete = () => {
     // 완료한 레시피 저장 (중복 체크)
     if (selectedRecipe) {
       // 이미 완료한 레시피인지 확인
@@ -374,7 +374,7 @@ export default function App() {
       }
     }
     navigateToStep("feedback");
-  };
+  };*/
 
   const handleReviewSubmit = () => {
     setSelectedRecipe(null);
@@ -487,24 +487,10 @@ export default function App() {
         />
       )}
 
-      {/* ✅ selectedRecipe 타입: RecipeDetailData */}
-      {currentStep === "ingredient-check" && isAuthenticated && selectedRecipe && (
-        <RecipeIngredientCheck
-          recipe={selectedRecipe} 
-          userProfile={userProfile}
-          onConfirm={handleStartCooking} // 확인 후 조리 시작
-          onBack={handleBackNavigation}
-        />
-      )}
+      
 
       {/* ✅ selectedRecipe 타입: RecipeDetailData */}
-      {currentStep === "cooking-in-progress" && isAuthenticated && selectedRecipe && (
-        <CookingInProgress
-          recipe={selectedRecipe}
-          onComplete={handleCookingInProgressComplete}
-          onBack={handleBackNavigation}
-        />
-      )}
+      
 
       {currentStep === "profile" && isAuthenticated && (
         <ProfileSetup 
@@ -527,23 +513,9 @@ export default function App() {
         <IngredientsInput onComplete={handleIngredientsComplete} onBack={handleBackNavigation} />
       )}
 
-      {currentStep === "recommendations" && userProfile && (
-        <RecipeRecommendation
-          profile={userProfile}
-          context={cookingContext}
-          onSelectRecipe={handleRecipeSelect} // 레시피 상세 페이지로 바로 이동
-          onBack={handleBackNavigation}
-          onAddIngredients={!cookingContext ? handleAddIngredientsFromRecommendation : undefined}
-        />
-      )}
+    
 
-      {currentStep === "recipe" && selectedRecipe && (
-        <RecipeDetail
-          recipe={selectedRecipe}
-          onComplete={handleCookingComplete}
-          onBack={handleBackNavigation}
-        />
-      )}
+      
 
       {currentStep === "feedback" && selectedRecipe && (
         <Feedback recipe={selectedRecipe} onComplete={handleFeedbackComplete} />
@@ -551,7 +523,7 @@ export default function App() {
 
       {currentStep === "recipe-list" && (
         <RecipeListPage 
-          onRecipeClick={handleRecipeSelectForCheck} // ✅ 핸들러 변경
+          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe.id)} // ✅ 핸들러 변경
           initialCategory={selectedCategory}
           savedRecipes={savedRecipes}
           onToggleSave={handleToggleSaveRecipe}
@@ -561,7 +533,7 @@ export default function App() {
       {currentStep === "saved" && (
         <SavedPage 
           savedRecipes={savedRecipes}
-          onRecipeClick={handleRecipeSelectForCheck} // ✅ 핸들러 변경
+          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe)}// ✅ 핸들러 변경
           onRemoveSaved={handleToggleSaveRecipe}
         />
       )}
@@ -601,7 +573,7 @@ export default function App() {
       {currentStep === "completed-recipes" && (
         <CompletedRecipesPage 
           completedRecipes={completedRecipes}
-          onRecipeClick={handleRecipeSelectForCheck} // ✅ 핸들러 변경
+          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe.id)} // ✅ 핸들러 변경
         />
       )}
 

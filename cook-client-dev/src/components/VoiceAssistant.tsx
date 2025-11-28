@@ -7,7 +7,7 @@ import { ScrollArea } from "./ui/scroll-area";
 import { Mic, MicOff, Bot, User, Send } from "lucide-react";
 import { toast } from "sonner";
 import { askGPT_raw, speechToText, askCookingFollowup } from "../utils/api";
-import type { Recipe } from "./types/recipe";
+import type { Recipe } from "../types/recipe";
 import { speakText, stopSpeaking } from "../utils/tts";
 import { Progress } from "./ui/progress";
 import type { UserProfile } from "./ProfileSetup";

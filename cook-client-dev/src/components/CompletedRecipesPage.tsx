@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { ChefHat, Clock, User } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
-import type { Recipe } from "./types/recipe";
+import type { Recipe } from "../types/recipe";
 
 // GPT가 준 이미지가 "예시용" 혹은 이상한지 판단
 const isPlaceholderImage = (url?: string) => {
@@ -24,10 +24,23 @@ const buildImageFromTitle = (title: string) => {
   return `https://source.unsplash.com/featured/?${query}`;
 };
 
-interface CompletedRecipe extends Recipe {
+interface CompletedRecipe {
+  id: string;
+  name: string;
+  recipeName?: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  cooking_method: string | null;
+  hashtags: string | null;
+  ingredients: { name: string; amount: string }[];
+  steps: string[];
   completedAt: string;
-  // GPT용 필드
+  cookingTime?: number | string;
+  servings?: number | string;
+  difficulty?: string;
 }
+
 
 interface CompletedRecipesPageProps {
   completedRecipes: CompletedRecipe[];

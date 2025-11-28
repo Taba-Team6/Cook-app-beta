@@ -23,7 +23,7 @@ import {
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { speechToText } from "../utils/api";
 import { toast } from "sonner";
-import { Recipe } from "./types/recipe";
+import { Recipe } from "../types/recipe";
 
 /*interface Recipe {
   id: string;
