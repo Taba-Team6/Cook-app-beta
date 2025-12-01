@@ -96,18 +96,25 @@ export function parseSteps(recipe) {
 }
 
 /**
- * 레시피 데이터를 경량 메타데이터로 변환
+ * 레시피 데이터를 경량 메타데이터로 변환 (수정됨: 재료 개수 로직 및 이미지 추가)
  * @param {Object} recipe - 식약처 레시피 객체
  * @returns {Object} 경량 레시피 데이터
  */
 export function toLightRecipe(recipe) {
+  const ingredientsDetails = recipe.RCP_PARTS_DTLS || '';
+  
+  // [수정] 재료 개수 계산 로직: ','를 기준으로 분리 후, 빈 문자열 제외 개수 카운트
+  const parts = ingredientsDetails.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  const ingredientsCount = parts.length;
+  
   return {
     id: recipe.RCP_SEQ,
     name: recipe.RCP_NM,
     category: recipe.RCP_PAT2 || '기타',
     cooking_method: recipe.RCP_WAY2 || null,
     hashtags: recipe.HASH_TAG || null,
-    ingredients_count: (recipe.RCP_PARTS_DTLS || '').length
+    ingredients_count: ingredientsCount, // 수정된 로직 적용
+    image: recipe.ATT_FILE_NO_MK || null // [추가] 이미지 경로(대) 필드 추가
   };
 }
 

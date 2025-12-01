@@ -4,7 +4,7 @@
 
 DROP TABLE IF EXISTS recipe_crawl_history;
 
-CREATE TABLE recipe_crawl_history (
+CREATE TABLE IF NOT EXISTS recipe_crawl_history (
     id INT AUTO_INCREMENT PRIMARY KEY,
     total_inserted INT NOT NULL,
     total_skipped INT NOT NULL,
