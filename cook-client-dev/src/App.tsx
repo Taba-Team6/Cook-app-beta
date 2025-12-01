@@ -588,6 +588,6 @@ export default function App() {
           onMyPageClick={() => navigateToStep("mypage")}
         />
       )}
-    </div>
+    </div> 
   );
 }
