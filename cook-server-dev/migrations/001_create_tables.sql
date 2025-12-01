@@ -6,6 +6,7 @@ DROP TABLE IF EXISTS saved_recipes;
 DROP TABLE IF EXISTS ingredients;
 DROP TABLE IF EXISTS recipes_light;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS recipe_crawl_history;
 
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -83,6 +84,7 @@ CREATE TABLE recipes_light (
     cooking_method VARCHAR(50),
     hashtags TEXT,
     ingredients_count INT DEFAULT 0,
+    image VARCHAR(255) NULL, -- [수정] image 컬럼 통합 완료
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_name (name),
@@ -104,4 +106,12 @@ CREATE TABLE cooking_sessions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id),
     INDEX idx_started_at (started_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE recipe_crawl_history (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    total_inserted INT NOT NULL,
+    total_skipped INT NOT NULL,
+    total_processed INT NOT NULL,
+    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -97,7 +97,7 @@ export function RecipeListPage({
       {loading && <div className="text-center py-10 text-gray-500">불러오는 중...</div>}
       {error && <div className="text-red-500 text-center mb-4">{error}</div>}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2"> {/* 2*n 배열을 위해 grid 변경 */}
+      <div className="grid grid-cols-2 gap-4"> {/* 2*n 배열을 위해 grid 변경 */}
         {!loading && recipes.length === 0 && (
           <p className="text-center text-gray-500 col-span-full">해당 조건의 레시피가 없습니다.</p>
         )}
