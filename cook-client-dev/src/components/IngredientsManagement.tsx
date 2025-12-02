@@ -22,7 +22,7 @@ import {
 import { format, differenceInDays, parseISO } from "date-fns";
 import { ko } from "date-fns/locale";
 import { getIngredients, addIngredient, updateIngredient, deleteIngredient } from "../utils/api";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 export interface Ingredient {
   id: string;
@@ -375,12 +375,17 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
           </div>
 
           {/* Add Dialog - 메인 화면용 */}
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            if (!open) {
-              setIsAddDialogOpen(false);
-              resetForm();
-            }
-          }}>
+          <Dialog
+            open={isAddDialogOpen || isEditDialogOpen}
+            onOpenChange={(open: boolean) => {
+              if (!open) {
+                setIsAddDialogOpen(false);
+                setIsEditDialogOpen(false);
+                setEditingIngredient(null);
+                resetForm();
+              }
+            }}
+          >
             <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>식재료 추가</DialogTitle>
@@ -403,7 +408,12 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
 
                 <div>
                   <Label htmlFor="location">보관 위치 *</Label>
-                  <Select value={formData.location} onValueChange={(value) => setFormData({ ...formData, location: value })}>
+                  <Select
+                    value={formData.location}
+                    onValueChange={(value: string) =>
+                      setFormData({ ...formData, location: value })
+                    }
+                  >
                     <SelectTrigger className="mt-1.5">
                       <SelectValue placeholder="냉장실, 냉동실, 실온 중 선택" />
                     </SelectTrigger>
@@ -430,7 +440,7 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
 
                   <div>
                     <Label htmlFor="unit">단위 *</Label>
-                    <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+                    <Select value={formData.unit} onValueChange={(value: string) => setFormData({ ...formData, unit: value })}>
                       <SelectTrigger className="mt-1.5">
                         <SelectValue placeholder="개/g/ml" />
                       </SelectTrigger>
@@ -463,7 +473,7 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
                       <Calendar
                         mode="single"
                         selected={formData.expiryDate}
-                        onSelect={(date) => setFormData({ ...formData, expiryDate: date })}
+                        onSelect={(date: Date | undefined) => setFormData({ ...formData, expiryDate: date })}
                         initialFocus
                         locale={ko}
                       />
@@ -646,14 +656,17 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
         )}
 
         {/* Add/Edit Dialog */}
-        <Dialog open={isAddDialogOpen || isEditDialogOpen} onOpenChange={(open) => {
-          if (!open) {
-            setIsAddDialogOpen(false);
-            setIsEditDialogOpen(false);
-            setEditingIngredient(null);
-            resetForm();
-          }
-        }}>
+        <Dialog
+          open={isAddDialogOpen || isEditDialogOpen}
+          onOpenChange={(open: boolean) => {
+            if (!open) {
+              setIsAddDialogOpen(false);
+              setIsEditDialogOpen(false);
+              setEditingIngredient(null);
+              resetForm();
+            }
+          }}
+        >
           <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
@@ -678,7 +691,7 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
 
               <div>
                 <Label htmlFor="location">보관 위치 *</Label>
-                <Select value={formData.location} onValueChange={(value) => setFormData({ ...formData, location: value })}>
+                <Select value={formData.location} onValueChange={(value: string) => setFormData({ ...formData, unit: value })}>
                   <SelectTrigger className="mt-1.5">
                     <SelectValue placeholder="냉장실, 냉동실, 실온 중 선택" />
                   </SelectTrigger>
@@ -705,7 +718,7 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
 
                 <div>
                   <Label htmlFor="unit">단위 *</Label>
-                  <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+                  <Select value={formData.unit} onValueChange={(value: string) => setFormData({ ...formData, unit: value })}>
                     <SelectTrigger className="mt-1.5">
                       <SelectValue placeholder="개/g/ml" />
                     </SelectTrigger>
@@ -738,7 +751,7 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
                     <Calendar
                       mode="single"
                       selected={formData.expiryDate}
-                      onSelect={(date) => setFormData({ ...formData, expiryDate: date })}
+                      onSelect={(date: Date | undefined) => setFormData({ ...formData, expiryDate: date })}
                       initialFocus
                       locale={ko}
                     />

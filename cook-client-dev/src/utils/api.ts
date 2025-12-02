@@ -148,6 +148,52 @@ export async function removeSavedRecipe(id: string) {
 }
 
 // ===============================
+// PUBLIC RECIPES (추가됨)
+// ===============================
+
+/**
+ * 공개 레시피 목록 조회 (필터 및 검색 포함)
+ * @param {object} params - { category, search, limit, offset }
+ */
+export async function getPublicRecipes(params: {
+  category?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  // 쿼리 파라미터 생성
+  const urlParams = new URLSearchParams();
+  if (params.category) urlParams.append("category", params.category);
+  if (params.search) urlParams.append("search", params.search);
+  if (params.limit !== undefined) urlParams.append("limit", String(params.limit));
+  if (params.offset !== undefined) urlParams.append("offset", String(params.offset));
+
+  const endpoint = `/recipes/public?${urlParams.toString()}`;
+
+  // 인증이 필요 없는 공개 API 호출
+  const res = await apiCall(endpoint, { method: "GET" }, false);
+  
+  // 백엔드 응답 구조에 맞게 recipes를 반환
+  return {
+    recipes: res.recipes || [],
+    total: res.total || 0,
+    limit: res.limit || 50,
+    offset: res.offset || 0,
+  };
+}
+
+/**
+ * 레시피 상세 정보 조회
+ * @param {string} id - 레시피 ID
+ */
+export async function getRecipeDetail(id: string) {
+  // 실시간 조회이므로 인증 없이 호출
+  const res = await apiCall(`/recipes/detail/${id}`, { method: "GET" }, false);
+  return res.recipe;
+}
+
+
+// ===============================
 // GPT — 기본 대화 (레시피 생성)
 // ===============================
 export async function askGPT_raw(data: { message: string; profile: any }) {

@@ -3,10 +3,10 @@ import { Auth } from "./components/Auth";
 import { HomePage } from "./components/HomePage";
 import { ProfileSetup, UserProfile } from "./components/ProfileSetup";
 import { ProfileComplete } from "./components/ProfileComplete";
-import { IngredientsInput, CookingContext } from "./components/IngredientsInput";
+//import { IngredientsInput, CookingContext } from "./components/IngredientsInput";
 //import { RecipeRecommendation } from "./components/RecipeRecommendation";
 //import { RecipeDetail } from "./components/RecipeDetail";
-import { Feedback } from "./components/Feedback";
+//import { Feedback } from "./components/Feedback";
 import { VoiceAssistant } from "./components/VoiceAssistant";
 //import { RecipeIngredientCheck } from "./components/RecipeIngredientCheck";
 //import { CookingInProgress } from "./components/CookingInProgress";
@@ -14,7 +14,7 @@ import { RecipeReview } from "./components/RecipeReview";
 import { TopNavBar } from "./components/TopNavBar";
 import { BottomNavBar } from "./components/BottomNavBar";
 import { RecipeListPage } from "./components/RecipeListPage";
-import type { Recipe as RecipeListRecipe } from "./types/recipe";
+//import type { Recipe as RecipeListRecipe } from "./types/recipe";
 import { SavedPage } from "./components/SavedPage";
 import { MyPage } from "./components/MyPage";
 import { IngredientsManagement } from "./components/IngredientsManagement";
@@ -22,11 +22,13 @@ import { AccountSettings } from "./components/AccountSettings";
 import { CommunityPage } from "./components/CommunityPage";
 import { CompletedRecipesPage } from "./components/CompletedRecipesPage";
 //import type { Recipe } from "./components/RecipeRecommendation"; // VoiceAssistant에서 레시피 목록용으로 잠시 유지
-import { getCurrentUser, setAuthToken, removeAuthToken } from "./utils/api";
+import { getCurrentUser, setAuthToken, removeAuthToken, updateProfile } from "./utils/api";
+import type { Recipe as RecipeListRecipe } from "./components/RecipeListPage";
+
 
 type AppStep = "auth" | "home" | "profile" | "profile-complete" | "ingredients" | "recommendations" | "recipe" | "feedback" | "voice-assistant" | "ingredient-check" | "cooking-in-progress" | "recipe-list" | "saved" | "mypage" | "ingredients-management" | "account-settings" | "recipe-review" | "community" | "completed-recipes";
 
-interface RecipeDetailData {
+export interface RecipeDetailData {
   id: string;
   name: string;
   image: string | null;
@@ -36,6 +38,10 @@ interface RecipeDetailData {
   hashtags: string | null;
   ingredients: { name: string; amount: string }[];
   steps: string[];
+
+  difficulty: string;     // ✔ 필수로 변경
+  cookingTime: number;    // ✔ 필수로 변경
+
 }
 
 // ✅ 문제점 1 해결: CompletedRecipe 타입을 RecipeDetailData 확장형으로 변경
@@ -48,7 +54,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [cookingContext, setCookingContext] = useState<CookingContext | null>(null);
+  //const [cookingContext, setCookingContext] = useState<CookingContext | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeDetailData | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -204,7 +210,7 @@ export default function App() {
     setIsAuthenticated(false);
     setCurrentUser(null);
     setUserProfile(null);
-    setCookingContext(null);
+    //setCookingContext(null);
     setSelectedRecipe(null);
     setPageHistory([]); // 로그아웃 시 히스토리 초기화
     setCurrentStep("auth");
@@ -215,25 +221,36 @@ export default function App() {
   };
 
   const handleProfileComplete = (profile: UserProfile) => {
+    // 1) Update frontend state
     setUserProfile(profile);
-    // Save profile to localStorage
+
+    // 2) Save to localStorage
     localStorage.setItem("cooking_assistant_user_profile", JSON.stringify(profile));
-    // 프로필 저장 후 이전 페이지로 이동
+
+    // 3) Save to DB (백엔드)
+    updateProfile({
+      allergies: profile.allergies,
+      preferences: profile,
+    })
+      .then(() => {
+        console.log("프로필이 DB에 성공적으로 저장되었습니다.");
+      })
+      .catch((err) => {
+        console.error("프로필 DB 저장 실패:", err);
+      });
+
+    // 4) Navigate back
     handleBackNavigation();
   };
 
+
   const handleQuickRecommendation = () => {
-    setCookingContext(null);
+    //setCookingContext(null);
     navigateToStep("recommendations");
   };
 
   const handleDetailedRecommendation = () => {
     navigateToStep("ingredients");
-  };
-
-  const handleIngredientsComplete = (context: CookingContext) => {
-    setCookingContext(context);
-    navigateToStep("recommendations");
   };
 
   // 1. 레시피 상세 페이지 (RecipeDetail)를 바로 보여주기 위한 핸들러 (추천 페이지에서 사용)
@@ -330,7 +347,10 @@ export default function App() {
         name: i.name,
         amount: i.amount,
       })) ?? [],
-      steps: recipe.steps ?? []
+      steps: recipe.steps ?? [],
+
+      difficulty: recipe.difficulty ?? "보통",
+      cookingTime: recipe.cookingTime ?? 10,
     };
 
     setSelectedRecipe(converted);
@@ -509,21 +529,11 @@ export default function App() {
         />
       )}
 
-      {currentStep === "ingredients" && userProfile && (
-        <IngredientsInput onComplete={handleIngredientsComplete} onBack={handleBackNavigation} />
-      )}
 
-    
-
-      
-
-      {currentStep === "feedback" && selectedRecipe && (
-        <Feedback recipe={selectedRecipe} onComplete={handleFeedbackComplete} />
-      )}
 
       {currentStep === "recipe-list" && (
         <RecipeListPage 
-          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe.id)} // ✅ 핸들러 변경
+          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe)} // ✅ 핸들러 변경
           initialCategory={selectedCategory}
           savedRecipes={savedRecipes}
           onToggleSave={handleToggleSaveRecipe}
@@ -588,6 +598,6 @@ export default function App() {
           onMyPageClick={() => navigateToStep("mypage")}
         />
       )}
-    </div>
+    </div> 
   );
 }

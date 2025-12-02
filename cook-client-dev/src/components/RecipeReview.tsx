@@ -4,19 +4,20 @@ import { Card, CardContent } from "./ui/card";
 import { Textarea } from "./ui/textarea";
 import { Star, Upload, Home, Send, PartyPopper } from "lucide-react";
 import { motion } from "motion/react";
+import type { RecipeDetailData } from "../App";  
 
 interface Recipe {
   id: string;
   name: string;
   category: string;
   difficulty: string;
-  cookingTime: string;
+  cookingTime: number;
   image: string;
   description: string;
 }
 
 interface RecipeReviewProps {
-  recipe: Recipe;
+  recipe: RecipeDetailData;  
   onSubmit: () => void;
   onSkip: () => void;
 }

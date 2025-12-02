@@ -40,10 +40,7 @@ export function HomePage({
 
   const hasProfile = userProfile && (
     userProfile.preferredCuisines.length > 0 ||
-    userProfile.availableTools.length > 0 ||
-    userProfile.cookingTime ||
-    userProfile.servings ||
-    userProfile.spiceLevel
+    userProfile.availableTools.length > 0 
   );
 
   return (

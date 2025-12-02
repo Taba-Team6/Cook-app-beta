@@ -48,6 +48,10 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         return;
       }
 
+
+      // 🔥🔥🔥 여기 추가 (매우 중요) 🔥🔥🔥
+      setAuthToken(response.token);
+
       // Store user info in session storage
       const userName = response.user.name || loginEmail.split('@')[0];
       sessionStorage.setItem("cooking_assistant_current_user", JSON.stringify({
@@ -111,6 +115,9 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         return;
       }
 
+      // 🔥🔥🔥 토큰 저장 추가
+      setAuthToken(response.token);
+      
       // Store user info in session storage
       sessionStorage.setItem("cooking_assistant_current_user", JSON.stringify({
         id: response.user.id,
@@ -145,7 +152,10 @@ export function Auth({ onAuthSuccess }: AuthProps) {
           </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "signup")}>
+        <Tabs
+          value={activeTab} 
+          onValueChange={(v: string) => setActiveTab(v as "login" | "signup")}
+          >
           <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="login">로그인</TabsTrigger>
             <TabsTrigger value="signup">회원가입</TabsTrigger>

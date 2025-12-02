@@ -111,10 +111,17 @@ export function CommunityPage() {
   }, []);
 
   const loadSavedRecipes = () => {
-    const savedRecipes = JSON.parse(localStorage.getItem("cooking_assistant_saved_recipes") || "[]");
-    const savedIds = new Set(savedRecipes.map((r: any) => r.id));
-    setSavedRecipeIds(savedIds);
-  };
+  const savedRecipes = JSON.parse(
+    localStorage.getItem("cooking_assistant_saved_recipes") || "[]"
+  );
+
+  // 🔥 Set<string> 으로 타입 직접 지정
+  const savedIds: Set<string> = new Set(
+    savedRecipes.map((r: any) => String(r.id))
+  );
+
+  setSavedRecipeIds(savedIds);
+};
 
   const getTimeAgo = (dateString: string) => {
     const now = new Date();

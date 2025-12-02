@@ -7,7 +7,7 @@ import * as foodsafetyAPI from '../utils/foodsafety-api.js';
 const router = express.Router();
 
 // ============================================
-// PUBLIC: 공용 레시피 목록 조회
+// PUBLIC: 공용 레시피 목록 조회 (image 컬럼 포함)
 // ============================================
 router.get('/public', async (req, res) => {
   try {
@@ -26,7 +26,7 @@ router.get('/public', async (req, res) => {
 
     const { category, search } = req.query;
 
-    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count 
+    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count, image 
                     FROM recipes_light 
                     WHERE (category IS NOT NULL AND category != '')`;
     const params = [];
@@ -150,7 +150,7 @@ router.get('/detail/:id', async (req, res) => {
 });
 
 // ============================================
-// ADMIN: 식약처 레시피 크롤링 (초기 데이터 수집)
+// ADMIN: 식약처 레시피 크롤링 (수정됨: UPDATE 로직 추가 및 image 포함)
 // ============================================
 router.post('/crawl', async (req, res) => {
   try {
@@ -158,10 +158,10 @@ router.post('/crawl', async (req, res) => {
     
     const recipes = await foodsafetyAPI.crawlAllRecipes();
     
-    console.log(`[Recipe Crawl] Inserting ${recipes.length} recipes into DB...`);
+    console.log(`[Recipe Crawl] Processing ${recipes.length} recipes in DB...`);
     
     let inserted = 0;
-    let skipped = 0;
+    let updated = 0;
     
     for (const recipe of recipes) {
       try {
@@ -174,36 +174,53 @@ router.post('/crawl', async (req, res) => {
         );
         
         if (existing.length > 0) {
-          skipped++;
+          // [수정] 기존 데이터가 존재하면 UPDATE를 수행 (이미지 및 재료 개수 갱신)
+          await query(
+            `UPDATE recipes_light 
+             SET name = ?, category = ?, cooking_method = ?, hashtags = ?, ingredients_count = ?, image = ?
+             WHERE id = ?`,
+            [
+              lightRecipe.name,
+              foodsafetyAPI.mapCategory(lightRecipe.category),
+              lightRecipe.cooking_method,
+              lightRecipe.hashtags,
+              lightRecipe.ingredients_count,
+              lightRecipe.image, // 대형 이미지 경로
+              lightRecipe.id // WHERE 조건
+            ]
+          );
+          updated++;
           continue;
         }
         
+        // [수정] 기존 데이터가 없을 경우 INSERT (image 컬럼 추가)
         await query(
-          `INSERT INTO recipes_light (id, name, category, cooking_method, hashtags, ingredients_count) 
-           VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO recipes_light (id, name, category, cooking_method, hashtags, ingredients_count, image) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)`, 
           [
             lightRecipe.id,
             lightRecipe.name,
             foodsafetyAPI.mapCategory(lightRecipe.category),
             lightRecipe.cooking_method,
             lightRecipe.hashtags,
-            lightRecipe.ingredients_count
+            lightRecipe.ingredients_count,
+            lightRecipe.image // image 값 추가
           ]
         );
         
         inserted++;
       } catch (err) {
-        console.error(`[Recipe Crawl] Error inserting recipe ${recipe.RCP_SEQ}:`, err);
+        console.error(`[Recipe Crawl] Error processing recipe ${recipe.RCP_SEQ}:`, err);
       }
     }
     
-    console.log(`[Recipe Crawl] Complete: ${inserted} inserted, ${skipped} skipped`);
+    console.log(`[Recipe Crawl] Complete: ${inserted} inserted, ${updated} updated`);
     
     res.json({
       success: true,
       message: 'Recipe crawl completed',
       inserted,
-      skipped,
+      updated,
       total: recipes.length
     });
     
