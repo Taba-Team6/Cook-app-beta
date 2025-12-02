@@ -128,23 +128,30 @@ export async function deleteIngredient(id: string) {
 // SAVED RECIPES
 // ===============================
 export async function getSavedRecipes() {
-  const res = await apiCall("/saved-recipes", {}, true);
+  const res = await apiCall("/recipes", {}, true);  // ✅ 수정
   return {
-    savedRecipes: res.data || res.savedRecipes || [],
+    // 백엔드에서 recipes 라는 이름으로 보내주니까 거기에 먼저 맞춰줌
+    savedRecipes: res.recipes || res.data || res.savedRecipes || [],
   };
 }
 
 export async function saveRecipe(recipeData: any) {
+  const payload = {
+    ...recipeData,
+    // DB에서 NOT NULL이라 기본값 한 번 더 보정
+    category: recipeData.category ?? "기타",
+  };
+
   const res = await apiCall(
-    "/saved-recipes",
-    { method: "POST", body: JSON.stringify(recipeData) },
+    "/recipes",                                   // ✅ 수정
+    { method: "POST", body: JSON.stringify(payload) },
     true
   );
-  return { savedRecipe: res.data || res.savedRecipe };
+  return { savedRecipe: res.recipe || res.data || res.savedRecipe };
 }
 
 export async function removeSavedRecipe(id: string) {
-  return apiCall(`/saved-recipes/${id}`, { method: "DELETE" }, true);
+  return apiCall(`/recipes/${id}`, { method: "DELETE" }, true);  // ✅ 수정
 }
 
 // ===============================
@@ -183,12 +190,22 @@ export async function getPublicRecipes(params: {
 }
 
 /**
- * 레시피 상세 정보 조회
+ * 레시피 상세 정보 조회 (식약처 API 실시간 조회)
  * @param {string} id - 레시피 ID
  */
 export async function getRecipeDetail(id: string) {
   // 실시간 조회이므로 인증 없이 호출
   const res = await apiCall(`/recipes/detail/${id}`, { method: "GET" }, false);
+  return res.recipe;
+}
+
+/**
+ * 레시피 전체 상세 정보 조회 (DB 크롤링 데이터)
+ * @param {string} id - 레시피 ID
+ */
+export async function getFullRecipeDetail(id: string) {
+  // DB에 저장된 전체 레시피를 조회하므로 인증 없이 호출
+  const res = await apiCall(`/recipes/full/${id}`, { method: "GET" }, false);
   return res.recipe;
 }
 

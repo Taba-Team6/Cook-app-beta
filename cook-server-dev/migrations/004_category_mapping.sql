@@ -1,14 +1,15 @@
 -- ============================================
--- CATEGORY NORMALIZATION FOR recipes_light
+-- CATEGORY NORMALIZATION FOR recipes (Migration Step 004)
+-- recipes_light 테이블에 대한 모든 참조를 recipes 테이블로 변경합니다.
 -- ============================================
 
 -- 0. NULL 방지
-UPDATE recipes_light
+UPDATE recipes
 SET category = '기타'
 WHERE category IS NULL OR TRIM(category) = '';
 
 -- 1. 카테고리 정규화
-UPDATE recipes_light
+UPDATE recipes
 SET category = CASE
     -- 밥류
     WHEN category LIKE '%밥%' OR category LIKE '%볶음밥%' OR category LIKE '%비빔밥%' THEN '밥'
@@ -50,6 +51,6 @@ SET category = CASE
 END;
 
 -- 2. 정규화 후 비어 있는 항목 처리
-UPDATE recipes_light
+UPDATE recipes
 SET category = '기타'
 WHERE category IS NULL OR TRIM(category) = '';

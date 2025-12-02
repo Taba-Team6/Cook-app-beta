@@ -7,7 +7,9 @@ import * as foodsafetyAPI from '../utils/foodsafety-api.js';
 const router = express.Router();
 
 // ============================================
-// PUBLIC: 공용 레시피 목록 조회 (image 컬럼 포함)
+// PUBLIC: 공용 레시피 목록 조회 (레시피 리스트 페이지용)
+// [수정] recipes_light -> recipes 테이블 사용
+// [수정] image 컬럼을 image_large로 변경하여 사용
 // ============================================
 router.get('/public', async (req, res) => {
   try {
@@ -26,8 +28,8 @@ router.get('/public', async (req, res) => {
 
     const { category, search } = req.query;
 
-    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count, image 
-                    FROM recipes_light 
+    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count, image_large AS image
+                    FROM recipes 
                     WHERE (category IS NOT NULL AND category != '')`;
     const params = [];
 
@@ -69,20 +71,104 @@ router.get('/public', async (req, res) => {
 
 
 // ============================================
+// PUBLIC: 레시피 전체 상세 정보 조회 (DB 크롤링 데이터) - GPT 및 상세 페이지용
+// [추가] 레시피 ID 기반으로 DB의 전체 레시피 데이터 조회
+// ============================================
+router.get('/full/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // DB에서 모든 컬럼을 조회
+    const fullRecipeResult = await query(
+      `SELECT * FROM recipes WHERE id = ?`,
+      [id]
+    );
+
+    if (fullRecipeResult.length === 0) {
+      return res.status(404).json({
+        error: 'Recipe not found',
+        message: 'Could not find recipe with the given ID in the database.'
+      });
+    }
+
+    const recipe = fullRecipeResult[0];
+
+    // MANUAL 필드를 배열로 가공 (프론트엔드 사용 용이성)
+    const steps = [];
+    for (let i = 1; i <= 20; i++) {
+        const stepNum = String(i).padStart(2, '0');
+        const manualKey = `manual_${stepNum}`;
+        
+        const text = recipe[manualKey];
+        
+        // 빈 값이나 NULL인 경우 스킵
+        if (text) {
+            steps.push({
+                step: steps.length + 1,
+                text: text,
+                // 이미지 필드는 DB에 저장되지 않았으므로 null로 처리
+                image: null 
+            });
+        }
+    }
+
+    // 클라이언트 통합에 용이하도록 객체 재구성
+    res.json({
+      recipe: {
+        id: recipe.id,
+        name: recipe.name,
+        category: recipe.category,
+        cooking_method: recipe.cooking_method,
+        image_small: recipe.image_small,
+        image_large: recipe.image_large,
+        
+        // 영양 정보
+        info_weight: recipe.info_weight,
+        calories: recipe.info_energy, // INFO_ENG
+        carbs: recipe.info_carb,     // INFO_CAR
+        protein: recipe.info_protein, // INFO_PRO
+        fat: recipe.info_fat,         // INFO_FAT
+        sodium: recipe.info_sodium,   // INFO_NA
+        
+        // 상세 정보
+        hashtags: recipe.hashtags,
+        ingredients_details: recipe.ingredients_details, // RCP_PARTS_DTLS
+        sodium_tip: recipe.sodium_tip, // RCP_NA_TIP
+        
+        // 조리 단계 (배열 형태)
+        steps: steps,
+
+        created_at: recipe.created_at,
+        updated_at: recipe.updated_at
+      }
+    });
+
+  } catch (error) {
+    console.error(`[Full Recipe Detail] Error fetching recipe ${req.params.id}:`, error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to fetch full recipe details from DB'
+    });
+  }
+});
+
+
+// ============================================
 // DEBUG: 카테고리 분포 확인
+// [수정] recipes_light -> recipes 테이블 사용
 // ============================================
 router.get('/categories', async (req, res) => {
   try {
     const categories = await query(
       `SELECT category, COUNT(*) as count 
-       FROM recipes_light 
+       FROM recipes 
        GROUP BY category 
        ORDER BY count DESC`
     );
     
-    const total = await query('SELECT COUNT(*) as total FROM recipes_light');
+    const total = await query('SELECT COUNT(*) as total FROM recipes');
     const nullCount = await query(
-      `SELECT COUNT(*) as count FROM recipes_light 
+      `SELECT COUNT(*) as count FROM recipes 
        WHERE category IS NULL OR category = ''`
     );
     
@@ -102,6 +188,7 @@ router.get('/categories', async (req, res) => {
 
 // ============================================
 // PUBLIC: 레시피 상세 정보 (식약처 API 실시간 조회)
+// [유지] 기존 기능 유지 (DB 도입 후 사용되지 않을 수 있지만, 기존 기능 유지를 요청했으므로 보존)
 // ============================================
 router.get('/detail/:id', async (req, res) => {
   try {
@@ -150,9 +237,25 @@ router.get('/detail/:id', async (req, res) => {
 });
 
 // ============================================
-// ADMIN: 식약처 레시피 크롤링 (수정됨: UPDATE 로직 추가 및 image 포함)
+// ADMIN: 식약처 레시피 크롤링 (전체 필드 INSERT/UPDATE 반영)
+// [수정] foodsafetyAPI.toLightRecipe -> foodsafetyAPI.toFullRecipe 사용
+// [수정] 전체 컬럼 INSERT/UPDATE 반영
 // ============================================
 router.post('/crawl', async (req, res) => {
+  // DB의 전체 컬럼 목록 (id, created_at, updated_at 제외)
+  const allColumns = [
+    'name', 'category', 'cooking_method', 'image_small', 'image_large', 
+    'info_weight', 'info_energy', 'info_carb', 'info_protein', 'info_fat', 'info_sodium', 
+    'ingredients_details', 'hashtags', 'sodium_tip', 
+    'manual_01', 'manual_02', 'manual_03', 'manual_04', 'manual_05', 'manual_06', 
+    'manual_07', 'manual_08', 'manual_09', 'manual_10', 'manual_11', 'manual_12', 
+    'manual_13', 'manual_14', 'manual_15', 'manual_16', 'manual_17', 'manual_18', 
+    'manual_19', 'manual_20', 'ingredients_count'
+  ];
+  
+  const updateSetClause = allColumns.map(col => `${col} = ?`).join(', ');
+  const insertPlaceholders = ['?'].concat(allColumns.map(() => '?')).join(', '); // id + allColumns
+
   try {
     console.log('[Recipe Crawl] Starting full crawl from FoodSafety API...');
     
@@ -165,52 +268,44 @@ router.post('/crawl', async (req, res) => {
     
     for (const recipe of recipes) {
       try {
-        const lightRecipe = foodsafetyAPI.toLightRecipe(recipe);
+        // [핵심 수정] foodsafetyAPI.toLightRecipe -> foodsafetyAPI.toFullRecipe 사용
+        const fullRecipe = foodsafetyAPI.toFullRecipe(recipe);
         
         // Check if already exists
         const existing = await query(
-          'SELECT id FROM recipes_light WHERE id = ?',
-          [lightRecipe.id]
+          'SELECT id FROM recipes WHERE id = ?',
+          [fullRecipe.id]
         );
         
+        // 크롤링된 레시피 데이터에서 allColumns에 해당하는 값들을 순서대로 추출
+        const recipeValues = allColumns.map(col => fullRecipe[col]);
+
         if (existing.length > 0) {
-          // [수정] 기존 데이터가 존재하면 UPDATE를 수행 (이미지 및 재료 개수 갱신)
+          // [수정] 기존 데이터가 존재하면 전체 필드 UPDATE 수행
+          const updateParams = recipeValues.concat(fullRecipe.id); // [value1, value2, ..., id]
           await query(
-            `UPDATE recipes_light 
-             SET name = ?, category = ?, cooking_method = ?, hashtags = ?, ingredients_count = ?, image = ?
+            `UPDATE recipes 
+             SET ${updateSetClause}
              WHERE id = ?`,
-            [
-              lightRecipe.name,
-              foodsafetyAPI.mapCategory(lightRecipe.category),
-              lightRecipe.cooking_method,
-              lightRecipe.hashtags,
-              lightRecipe.ingredients_count,
-              lightRecipe.image, // 대형 이미지 경로
-              lightRecipe.id // WHERE 조건
-            ]
+            updateParams
           );
           updated++;
-          continue;
+        } else {
+          // [수정] 기존 데이터가 없을 경우 전체 필드 INSERT 수행
+          const insertColumns = ['id'].concat(allColumns).join(', ');
+          const insertParams = [fullRecipe.id].concat(recipeValues); // [id, value1, value2, ...]
+          await query(
+            `INSERT INTO recipes (${insertColumns}) 
+             VALUES (${insertPlaceholders})`, 
+            insertParams
+          );
+          
+          inserted++;
         }
-        
-        // [수정] 기존 데이터가 없을 경우 INSERT (image 컬럼 추가)
-        await query(
-          `INSERT INTO recipes_light (id, name, category, cooking_method, hashtags, ingredients_count, image) 
-           VALUES (?, ?, ?, ?, ?, ?, ?)`, 
-          [
-            lightRecipe.id,
-            lightRecipe.name,
-            foodsafetyAPI.mapCategory(lightRecipe.category),
-            lightRecipe.cooking_method,
-            lightRecipe.hashtags,
-            lightRecipe.ingredients_count,
-            lightRecipe.image // image 값 추가
-          ]
-        );
-        
-        inserted++;
       } catch (err) {
-        console.error(`[Recipe Crawl] Error processing recipe ${recipe.RCP_SEQ}:`, err);
+        // [에러 처리 강화] toFullRecipe에서 오류가 나지 않도록 가정하고, DB 오류만 로깅
+        // foodsafetyAPI.toFullRecipe는 JSON 파싱 오류가 있을 경우 여기서 잡힐 수 있습니다.
+        console.error(`[Recipe Crawl] Error inserting/updating recipe ${recipe.RCP_SEQ}:`, err);
       }
     }
     
@@ -233,8 +328,9 @@ router.post('/crawl', async (req, res) => {
   }
 });
 
+
 // ============================================
-// 조리 세션 시작
+// 조리 세션 시작 (기존 코드 유지)
 // ============================================
 router.post('/session/start', authenticateToken, async (req, res) => {
   try {
@@ -271,7 +367,7 @@ router.post('/session/start', authenticateToken, async (req, res) => {
 });
 
 // ============================================
-// 조리 세션 종료
+// 조리 세션 종료 (기존 코드 유지)
 // ============================================
 router.put('/session/finish/:id', authenticateToken, async (req, res) => {
   try {
@@ -326,7 +422,7 @@ router.put('/session/finish/:id', authenticateToken, async (req, res) => {
 });
 
 // ============================================
-// 현재 진행 중인 세션 조회
+// 현재 진행 중인 세션 조회 (기존 코드 유지)
 // ============================================
 router.get('/session/active', authenticateToken, async (req, res) => {
   try {
@@ -355,7 +451,7 @@ router.get('/session/active', authenticateToken, async (req, res) => {
 router.use(authenticateToken);
 
 // ============================================
-// Get All Saved Recipes
+// Get All Saved Recipes (기존 코드 유지)
 // ============================================
 router.get('/', async (req, res) => {
   try {
@@ -390,7 +486,7 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
-// Save Recipe
+// Save Recipe (기존 코드 유지)
 // ============================================
 router.post('/', async (req, res) => {
   try {
@@ -479,7 +575,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================
-// Remove Saved Recipe
+// Remove Saved Recipe (기존 코드 유지)
 // ============================================
 router.delete('/:id', async (req, res) => {
   try {
@@ -511,7 +607,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // ============================================
-// Check if Recipe is Saved
+// Check if Recipe is Saved (기존 코드 유지)
 // ============================================
 router.get('/check/:recipe_id', async (req, res) => {
   try {
@@ -537,7 +633,7 @@ router.get('/check/:recipe_id', async (req, res) => {
 });
 
 // ============================================
-// Get Recipes by Category
+// Get Recipes by Category (기존 코드 유지)
 // ============================================
 router.get('/category/:category', async (req, res) => {
   try {
@@ -572,7 +668,7 @@ router.get('/category/:category', async (req, res) => {
 });
 
 // ============================================
-// Add to Cooking History
+// Add to Cooking History (기존 코드 유지)
 // ============================================
 router.post('/history', async (req, res) => {
   try {
@@ -608,7 +704,7 @@ router.post('/history', async (req, res) => {
 });
 
 // ============================================
-// Get Cooking History
+// Get Cooking History (기존 코드 유지)
 // ============================================
 router.get('/history', async (req, res) => {
   try {
