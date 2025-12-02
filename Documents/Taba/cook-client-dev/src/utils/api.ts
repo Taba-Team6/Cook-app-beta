@@ -1,10 +1,15 @@
 // ========================================
-// 🟩 utils/api.ts — 최종 통합 버전
+// 🟩 utils/api.ts — 최종 통합 수정 버전
 // ========================================
+import { Capacitor } from '@capacitor/core';
 
-//const API_BASE_URL = "http://localhost:3001/api";
-const API_BASE_URL = "http://10.0.2.2:3001/api";
+// [중요] 안드로이드 에뮬레이터 접속 호환성 처리
+// 앱(Native) 실행 시: 10.0.2.2 (에뮬레이터가 PC localhost를 가리키는 주소)
+// 웹(Web) 실행 시: localhost
+const isApp = Capacitor.isNativePlatform();
+const DOMAIN = isApp ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
+const API_BASE_URL = `${DOMAIN}/api`;
 
 // ===============================
 // AUTH TOKEN
@@ -25,9 +30,9 @@ export function removeAuthToken() {
 // 공통 API 호출
 // ===============================
 async function apiCall(
-  endpoint: string,
-  options: RequestInit = {},
-  requiresAuth: boolean = false
+    endpoint: string,
+    options: RequestInit = {},
+    requiresAuth: boolean = false
 ) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -40,6 +45,7 @@ async function apiCall(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
+  // [수정] 모든 호출이 위에서 정의한 API_BASE_URL을 사용하도록 통일
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
@@ -83,13 +89,13 @@ export async function getProfile() {
 
 export async function updateProfile(profileData: any) {
   return apiCall(
-    "/profile",
-    { method: "PUT", body: JSON.stringify(profileData) },
-    true
+      "/profile",
+      { method: "PUT", body: JSON.stringify(profileData) },
+      true
   );
 }
 
-// 프론트에서 import하는 함수 (없으면 오류남)
+// 프론트에서 import하는 함수
 export async function getCurrentUser() {
   return getProfile();
 }
@@ -106,18 +112,18 @@ export async function getIngredients() {
 
 export async function addIngredient(data: any) {
   const res = await apiCall(
-    "/ingredients",
-    { method: "POST", body: JSON.stringify(data) },
-    true
+      "/ingredients",
+      { method: "POST", body: JSON.stringify(data) },
+      true
   );
   return { ingredient: res.data || res.ingredient };
 }
 
 export async function updateIngredient(id: string, data: any) {
   const res = await apiCall(
-    `/ingredients/${id}`,
-    { method: "PUT", body: JSON.stringify(data) },
-    true
+      `/ingredients/${id}`,
+      { method: "PUT", body: JSON.stringify(data) },
+      true
   );
   return { ingredient: res.data || res.ingredient };
 }
@@ -138,9 +144,9 @@ export async function getSavedRecipes() {
 
 export async function saveRecipe(recipeData: any) {
   const res = await apiCall(
-    "/saved-recipes",
-    { method: "POST", body: JSON.stringify(recipeData) },
-    true
+      "/saved-recipes",
+      { method: "POST", body: JSON.stringify(recipeData) },
+      true
   );
   return { savedRecipe: res.data || res.savedRecipe };
 }
@@ -150,20 +156,14 @@ export async function removeSavedRecipe(id: string) {
 }
 
 // ===============================
-// PUBLIC RECIPES (추가됨)
+// PUBLIC RECIPES
 // ===============================
-
-/**
- * 공개 레시피 목록 조회 (필터 및 검색 포함)
- * @param {object} params - { category, search, limit, offset }
- */
 export async function getPublicRecipes(params: {
   category?: string;
   search?: string;
   limit?: number;
   offset?: number;
 }) {
-  // 쿼리 파라미터 생성
   const urlParams = new URLSearchParams();
   if (params.category) urlParams.append("category", params.category);
   if (params.search) urlParams.append("search", params.search);
@@ -171,11 +171,8 @@ export async function getPublicRecipes(params: {
   if (params.offset !== undefined) urlParams.append("offset", String(params.offset));
 
   const endpoint = `/recipes/public?${urlParams.toString()}`;
-
-  // 인증이 필요 없는 공개 API 호출
   const res = await apiCall(endpoint, { method: "GET" }, false);
-  
-  // 백엔드 응답 구조에 맞게 recipes를 반환
+
   return {
     recipes: res.recipes || [],
     total: res.total || 0,
@@ -184,12 +181,7 @@ export async function getPublicRecipes(params: {
   };
 }
 
-/**
- * 레시피 상세 정보 조회
- * @param {string} id - 레시피 ID
- */
 export async function getRecipeDetail(id: string) {
-  // 실시간 조회이므로 인증 없이 호출
   const res = await apiCall(`/recipes/detail/${id}`, { method: "GET" }, false);
   return res.recipe;
 }
@@ -199,7 +191,8 @@ export async function getRecipeDetail(id: string) {
 // GPT — 기본 대화 (레시피 생성)
 // ===============================
 export async function askGPT_raw(data: { message: string; profile: any }) {
-  const res = await fetch("http://localhost:3001/api/ai/chat", {
+  // [수정] 하드코딩된 주소 제거 -> API_BASE_URL 사용
+  const res = await fetch(`${API_BASE_URL}/ai/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -213,11 +206,12 @@ export async function askGPT_raw(data: { message: string; profile: any }) {
 // GPT — Followup (레시피 + 대화)
 // ===============================
 export async function askCookingFollowup(
-  recipe: any,
-  question: string,
-  profile: any
+    recipe: any,
+    question: string,
+    profile: any
 ) {
-  const res = await fetch("http://localhost:3001/api/ai/followup", {
+  // [수정] 하드코딩된 주소 제거 -> API_BASE_URL 사용
+  const res = await fetch(`${API_BASE_URL}/ai/followup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ recipe, question, profile }),
@@ -230,7 +224,8 @@ export async function askCookingFollowup(
 // GPT — Intent (시작 의도 감지)
 // ===============================
 export async function detectStartIntent(text: string) {
-  const res = await fetch("http://localhost:3001/api/ai/intent", {
+  // [수정] 하드코딩된 주소 제거 -> API_BASE_URL 사용
+  const res = await fetch(`${API_BASE_URL}/ai/intent`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
@@ -247,7 +242,8 @@ export async function speechToText(audioBlob: Blob) {
   const formData = new FormData();
   formData.append("audio", audioBlob);
 
-  const res = await fetch("http://localhost:3001/api/voice/stt", {
+  // [수정] 하드코딩된 주소 제거 -> API_BASE_URL 사용
+  const res = await fetch(`${API_BASE_URL}/voice/stt`, {
     method: "POST",
     body: formData,
   });
@@ -262,9 +258,9 @@ export async function speechToText(audioBlob: Blob) {
 // ===============================
 export async function textToSpeech(text: string) {
   return apiCall(
-    "/ai/voice/tts",
-    { method: "POST", body: JSON.stringify({ text }) },
-    true
+      "/ai/voice/tts",
+      { method: "POST", body: JSON.stringify({ text }) },
+      true
   );
 }
 
