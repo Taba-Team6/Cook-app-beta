@@ -1,0 +1,9 @@
+{
+  "appId": "com.cookapp.mobile",
+  "appName": "Cooking Assistant",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  }
+}
