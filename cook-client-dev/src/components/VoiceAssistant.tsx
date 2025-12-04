@@ -11,6 +11,8 @@ import type { Recipe } from "../types/recipe";
 import { speakText, stopSpeaking } from "../utils/tts";
 import { Progress } from "./ui/progress";
 import type { UserProfile } from "./ProfileSetup";
+import type { FullRecipe } from "./FoodRecipe";
+
 
 // ===============================
 // Types
@@ -20,6 +22,9 @@ interface VoiceAssistantProps {
   onBack: () => void;
   initialRecipe?: Recipe | null;
   userProfile: UserProfile | null;
+
+  // ⭐ App.tsx에서 넘기고 있는 prop (필수 추가)
+  initialRecipeContext?: FullRecipe | null;
 }
 
 interface ChatMessage {

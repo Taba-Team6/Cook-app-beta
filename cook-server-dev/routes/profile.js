@@ -13,9 +13,10 @@ router.use(authenticateToken);
 router.get('/', async (req, res) => {
   try {
     const users = await query(
-      'SELECT id, email, name, allergies, preferences, created_at, updated_at FROM users WHERE id = ?',
-      [req.user.id]
-    );
+  'SELECT id, email, name, allergies, preferences, created_at, updated_at FROM users WHERE email = ?',
+  [req.user.email]
+  );
+
 
     if (users.length === 0) {
       return res.status(404).json({
@@ -48,7 +49,11 @@ router.get('/', async (req, res) => {
 // Update User Profile
 // ============================================
 router.put('/', async (req, res) => {
+  console.log("📥 PROFILE UPDATE BODY:", req.body);
+  console.log("🔑 현재 토큰 유저:", req.user);
+
   try {
+    const userEmail = req.user.email;
     const { name, allergies, preferences } = req.body;
 
     const updates = [];
@@ -71,26 +76,30 @@ router.put('/', async (req, res) => {
 
     if (updates.length === 0) {
       return res.status(400).json({
-        error: 'No fields to update'
+        error: 'No fields to update',
       });
     }
 
-    values.push(req.user.id);
+    // WHERE 조건에 email 사용
+    values.push(userEmail);
 
     await query(
-      `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
+      `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE email = ?`,
       values
     );
 
-    // Fetch updated profile
+    // 업데이트된 프로필 다시 조회
     const users = await query(
-      'SELECT id, email, name, allergies, preferences, created_at, updated_at FROM users WHERE id = ?',
-      [req.user.id]
+      'SELECT id, email, name, allergies, preferences, created_at, updated_at FROM users WHERE email = ?',
+      [userEmail]
     );
 
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'Profile not found after update' });
+    }
+
     const profile = users[0];
-    
-    // Parse JSON fields
+
     if (profile.allergies && typeof profile.allergies === 'string') {
       profile.allergies = JSON.parse(profile.allergies);
     }
@@ -99,15 +108,15 @@ router.put('/', async (req, res) => {
     }
 
     res.json({ profile });
-
   } catch (error) {
     console.error('Update profile error:', error);
     res.status(500).json({
       error: 'Internal server error',
-      message: 'Failed to update profile'
+      message: 'Failed to update profile',
     });
   }
 });
+
 
 // ============================================
 // Get User Statistics

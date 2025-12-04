@@ -79,18 +79,51 @@ export async function getProfile() {
   return apiCall("/profile", {}, true);
 }
 
-export async function updateProfile(profileData: any) {
-  return apiCall(
-    "/profile",
-    { method: "PUT", body: JSON.stringify(profileData) },
-    true
-  );
+export async function updateProfile(data: {
+  name?: string;
+  allergies?: string[];
+  preferences?: any;
+}) {
+  const token = localStorage.getItem("cooking_assistant_token"); // 프로젝트에서 실제로 쓰는 저장소 이름 확인해서 맞춰줘
+
+  const res = await fetch(`${API_BASE_URL}/profile`, {
+    method: "PUT",
+    headers: {  
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("updateProfile 실패:", res.status, errorBody);
+    throw new Error("Failed to update profile");
+  }
+
+  return res.json(); // { profile: ... } 형태로 백엔드에서 보내줌
 }
 
-// 프론트에서 import하는 함수 (없으면 오류남)
+// 프론트에서 import하는 함수
 export async function getCurrentUser() {
-  return getProfile();
+  const res = await getProfile();     // { profile: {...} }
+  const profile = res.profile;
+
+  // App.tsx에서 기대하는 user 형태로 변환
+  const user = {
+    id: profile.id,
+    email: profile.email,
+    name: profile.name,
+  };
+
+  return {
+    user,
+    profile,
+  };
 }
+
+
+
 
 // ===============================
 // INGREDIENTS
@@ -128,23 +161,31 @@ export async function deleteIngredient(id: string) {
 // SAVED RECIPES
 // ===============================
 export async function getSavedRecipes() {
-  const res = await apiCall("/saved-recipes", {}, true);
-  return {
-    savedRecipes: res.data || res.savedRecipes || [],
-  };
+  const res = await apiCall("/recipes", {}, true);
+  // 백엔드에서 { recipes: [...] } 형태로 보내준다고 가정
+  const list = res.recipes || res.data || res.savedRecipes || [];
+  return list;  // 🔥 배열 자체를 반환
 }
 
+
+
 export async function saveRecipe(recipeData: any) {
+  const payload = {
+    ...recipeData,
+    // DB에서 NOT NULL이라 기본값 한 번 더 보정
+    category: recipeData.category ?? "기타",
+  };
+
   const res = await apiCall(
-    "/saved-recipes",
-    { method: "POST", body: JSON.stringify(recipeData) },
+    "/recipes",                                   // ✅ 수정
+    { method: "POST", body: JSON.stringify(payload) },
     true
   );
-  return { savedRecipe: res.data || res.savedRecipe };
+  return { savedRecipe: res.recipe || res.data || res.savedRecipe };
 }
 
 export async function removeSavedRecipe(id: string) {
-  return apiCall(`/saved-recipes/${id}`, { method: "DELETE" }, true);
+  return apiCall(`/recipes/${id}`, { method: "DELETE" }, true);  // ✅ 수정
 }
 
 // ===============================
@@ -183,12 +224,22 @@ export async function getPublicRecipes(params: {
 }
 
 /**
- * 레시피 상세 정보 조회
+ * 레시피 상세 정보 조회 (식약처 API 실시간 조회)
  * @param {string} id - 레시피 ID
  */
 export async function getRecipeDetail(id: string) {
   // 실시간 조회이므로 인증 없이 호출
   const res = await apiCall(`/recipes/detail/${id}`, { method: "GET" }, false);
+  return res.recipe;
+}
+
+/**
+ * 레시피 전체 상세 정보 조회 (DB 크롤링 데이터)
+ * @param {string} id - 레시피 ID
+ */
+export async function getFullRecipeDetail(id: string) {
+  // DB에 저장된 전체 레시피를 조회하므로 인증 없이 호출
+  const res = await apiCall(`/recipes/full/${id}`, { method: "GET" }, false);
   return res.recipe;
 }
 

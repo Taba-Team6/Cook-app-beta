@@ -1,3 +1,7 @@
+-- ============================================
+-- INSERT SAMPLE DATA (Migration Step 002)
+-- ============================================
+
 INSERT INTO users (id, email, password_hash, name)
 VALUES ('sample-user-001', 'demo@cooking.com', '$2a$10$YourHashedPasswordHere', '데모 사용자');
 
