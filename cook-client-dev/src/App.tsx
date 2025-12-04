@@ -20,20 +20,23 @@ import { getCurrentUser, setAuthToken, removeAuthToken, updateProfile, saveRecip
 
 // [NEW IMPORT] FoodRecipe 컴포넌트와 FullRecipe 타입을 임포트
 import { FoodRecipe, FullRecipe } from "./components/FoodRecipe"; 
+import { OnboardingGuide } from "./components/OnboardingGuide";
 
 // [MODIFIED] AppStep에 'full-recipe' 추가
 type AppStep = "auth" | "home" | "profile" | "profile-complete" | "ingredients" | "recommendations" | "recipe" | "feedback" | "voice-assistant" | "ingredient-check" | "cooking-in-progress" | "recipe-list" | "saved" | "mypage" | "ingredients-management" | "account-settings" | "recipe-review" | "community" | "completed-recipes" | "full-recipe";
 
 interface RecipeDetailData {
-	id: string;
-	name: string;
-	image: string | null;
-	description: string | null;
-	category: string;
-	cooking_method: string | null;
-	hashtags: string | null;
-	ingredients: { name: string; amount: string }[];
-	steps: string[];
+    id: string;
+    name: string;
+    image: string | null;
+    description: string | null;
+    category: string;
+    cooking_method: string | null;
+    hashtags: string | null;
+    ingredients: { name: string; amount: string }[];
+    steps: string[];
+    difficulty?: string;     
+    cookingTime?: number;    
 }
 
 // ✅ 문제점 1 해결: CompletedRecipe 타입을 RecipeDetailData 확장형으로 변경
@@ -54,6 +57,7 @@ export default function App() {
 	const [completedRecipes, setCompletedRecipes] = useState<CompletedRecipe[]>([]);
 	const [selectedCategory, setSelectedCategory] = useState<string>("전체");
 	const [savedRecipes, setSavedRecipes] = useState<RecipeListRecipe[]>([]);
+	const [showOnboarding, setShowOnboarding] = useState(false);
 
     // [NEW STATE] 전체 레시피 페이지에 보여줄 레시피 ID
     const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null);
@@ -113,6 +117,16 @@ export default function App() {
 	checkSession();
 	}, []);
 
+	useEffect(() => {
+        if (isAuthenticated && currentStep === "home" && currentUser) {
+            const key = `cooking_assistant_onboarding_shown_${currentUser.id}`;
+            const flag = localStorage.getItem(key);
+
+            if (flag !== "true") {
+                setShowOnboarding(true);
+            }
+        }
+    }, [isAuthenticated, currentStep, currentUser]);
 
 	// Load dark mode preference and user profile
 	useEffect(() => {
@@ -277,6 +291,14 @@ export default function App() {
 		navigateToStep("ingredients");
 	};
 
+	const handleOnboardingFinish = () => {
+        setShowOnboarding(false);
+        if (currentUser) {
+            const key = `cooking_assistant_onboarding_shown_${currentUser.id}`;
+            localStorage.setItem(key, "true");
+        }
+    };
+
 	const handleIngredientsComplete = (context: CookingContext) => {
 		setCookingContext(context);
 		navigateToStep("recommendations");
@@ -357,7 +379,7 @@ export default function App() {
 		// 대신 AI 레시피를 RecipeDetailData 구조로 변환해서 저장
 
 		const converted: RecipeDetailData = {
-			id: "ai-" + Date.now(),  // 가짜 ID 생성
+			id: "ai-" + Date.now(), // 가짜 ID 생성
 			name: recipe.recipeName ?? "AI 추천 레시피",
 			image: null,
 			description: recipe.description ?? null,
@@ -368,7 +390,10 @@ export default function App() {
 				name: i.name,
 				amount: i.amount,
 			})) ?? [],
-			steps: recipe.steps ?? []
+			steps: recipe.steps ?? [],
+            // 🔥 nn 브랜치의 추가 필드를 반영합니다.
+            difficulty: recipe.difficulty ?? "보통",
+            cookingTime: recipe.cookingTime ?? 10,
 		};
 
 		setSelectedRecipe(converted);
@@ -441,7 +466,7 @@ export default function App() {
 	};
 
 	// 네비게이션 바 표시 여부 결정
-	const shouldShowNavigation = isAuthenticated && currentStep !== "auth";
+	const shouldShowNavigation = isAuthenticated && currentStep !== "auth" && !showOnboarding;
 
 	// 하단 네비게이션 활성 탭 결정
 	const getActiveBottomTab = () => {
@@ -495,6 +520,7 @@ export default function App() {
 			)}
 
 			{currentStep === "home" && isAuthenticated && (
+				<>	// Fragment 시작
 				<HomePage 
 					onGetStarted={handleGetStarted} 
 					onVoiceAssistant={handleVoiceAssistant}
@@ -508,6 +534,12 @@ export default function App() {
 					}}
 					onIngredientsClick={() => navigateToStep("ingredients-management")}
 				/>
+
+				{/* 🔥 nn 브랜치에서 추가된 온보딩 가이드 */}
+				{showOnboarding && (
+					<OnboardingGuide onFinish={handleOnboardingFinish} />
+				)}
+				</> // Fragment 끝
 			)}
 
 			{currentStep === "voice-assistant" && isAuthenticated && (
@@ -552,10 +584,6 @@ export default function App() {
 			{currentStep === "ingredients" && userProfile && (
 				<IngredientsInput onComplete={handleIngredientsComplete} onBack={handleBackNavigation} />
 			)}
-
-		
-
-			
 
 			{currentStep === "feedback" && selectedRecipe && (
 				<Feedback recipe={selectedRecipe} onComplete={handleFeedbackComplete} />
