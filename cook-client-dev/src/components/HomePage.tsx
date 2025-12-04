@@ -19,7 +19,8 @@ interface HomePageProps {
    국/찌개, 반찬, 밥, 일품, 후식, 기타
 */
 const categories = [
-  { icon: "🍲", name: "국/찌개", color: "#A5B68D" },
+  { icon: "✨", name: "전체", color: "#4F46E5" },
+  { icon: "🍲", name: "국&찌개", color: "#A5B68D" },
   { icon: "🥢", name: "반찬", color: "#E07A5F" },
   { icon: "🍚", name: "밥", color: "#F2CC8F" },
   { icon: "🍽️", name: "일품", color: "#F4F1DE" },

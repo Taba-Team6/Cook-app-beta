@@ -155,9 +155,9 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         </div>
 
         <Tabs
-          value={activeTab}
-          onValueChange={(v: "login" | "signup") => setActiveTab(v)}
-        >
+          value={activeTab} 
+          onValueChange={(v: string) => setActiveTab(v as "login" | "signup")}
+          >
           <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="login">로그인</TabsTrigger>
             <TabsTrigger value="signup">회원가입</TabsTrigger>

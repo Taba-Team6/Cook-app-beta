@@ -84,25 +84,17 @@ export async function updateProfile(data: {
   allergies?: string[];
   preferences?: any;
 }) {
-  const token = localStorage.getItem("cooking_assistant_token"); // 프로젝트에서 실제로 쓰는 저장소 이름 확인해서 맞춰줘
-
-  const res = await fetch(`${API_BASE_URL}/profile`, {
-    method: "PUT",
-    headers: {  
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  // 🔥 따로 토큰 꺼낼 필요 없이 apiCall 사용
+  return apiCall(
+    "/profile",
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
     },
-    body: JSON.stringify(data),
-  });
-
-  if (!res.ok) {
-    const errorBody = await res.text();
-    console.error("updateProfile 실패:", res.status, errorBody);
-    throw new Error("Failed to update profile");
-  }
-
-  return res.json(); // { profile: ... } 형태로 백엔드에서 보내줌
+    true // ✅ 인증 필요한 요청이니까 true
+  );
 }
+
 
 // 프론트에서 import하는 함수
 export async function getCurrentUser() {
