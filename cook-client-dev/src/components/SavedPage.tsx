@@ -35,11 +35,11 @@ export function SavedPage({ savedRecipes = [], onRecipeClick, onRemoveSaved }: S
                 // -----------------------------------------------
                 onClick={() => onRecipeClick?.(recipe.id)}
               >
-                <div className="aspect-video relative bg-muted">
+                <div className="aspect-square relative bg-muted">
                   <ImageWithFallback
                     src={recipe.image}
                     alt={recipe.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-over"
                   />
                   <div className="absolute top-2 right-2">
                     <Button

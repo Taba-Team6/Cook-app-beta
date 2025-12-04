@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getPublicRecipes } from "../utils/api";
+import { Bookmark } from "lucide-react";
 
 export interface Recipe {
     id: string;
@@ -34,7 +35,7 @@ export function RecipeListPage({
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const CATEGORY_LIST = ["전체", "반찬", "국/찌개", "일품", "밥", "기타"];
+    const CATEGORY_LIST = ["전체", "반찬", "국&찌개", "일품", "밥", "후식", "기타"];
 
     const fetchRecipes = async () => {
         try {
@@ -111,16 +112,34 @@ export function RecipeListPage({
                     >
                         
                         <div className="flex-1"> 
-                            {/* 1. 사진 (Image) */}
+                            {/* 1. 사진 (Image) + 우측 상단 북마크 버튼 */}
+                            <div className="w-full h-40 bg-gray-100 mb-3 rounded-lg overflow-hidden relative">
                             {recipe.image && (
-                                <div className="w-full h-40 bg-gray-100 mb-3 rounded-lg overflow-hidden">
-                                    <img 
-                                        src={recipe.image} 
-                                        alt={recipe.name} 
-                                        className="w-full h-full object-cover"
-                                    />
-                                </div>
+                                <img
+                                src={recipe.image}
+                                alt={recipe.name}
+                                className="w-full h-full object-cover"
+                                />
                             )}
+
+                            {/* 북마크 버튼 */}
+                            <button
+                                className="absolute top-2 right-2 p-1.5 rounded-full bg-black/40 hover:bg-black/60 transition"
+                                onClick={(e) => {
+                                e.stopPropagation(); // 카드 전체 클릭과 분리
+                                onToggleSave(recipe);
+                                }}
+                            >
+                                {isSaved(recipe.id) ? (
+                                // 저장된 상태: 노란색 북마크
+                                <Bookmark className="w-9 h-9" fill="#FACC15" stroke="#FACC15" />
+                                ) : (
+                                // 미저장 상태: 흰색 라인 북마크
+                                <Bookmark className="w-9 h-9 text-white" />
+                                )}
+                            </button>
+                            </div>
+
 
                             {/* 2. 레시피 이름 (Name) */}
                             <h3 className="text-lg font-bold mb-2 text-foreground">{recipe.name}</h3>
@@ -147,19 +166,6 @@ export function RecipeListPage({
                                     </p>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* 저장 버튼 (클릭 영역과 분리) */}
-                        <div className="flex justify-end pt-3 border-t mt-3">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation(); // 레시피 항목 클릭 이벤트 방지
-                                    onToggleSave(recipe);
-                                }}
-                                className="px-3 py-1 rounded border text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
-                            >
-                                {isSaved(recipe.id) ? "저장됨" : "저장"}
-                            </button>
                         </div>
                     </div>
                 ))}

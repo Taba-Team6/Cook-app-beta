@@ -4,24 +4,19 @@ import { HomePage } from "./components/HomePage";
 import { ProfileSetup, UserProfile } from "./components/ProfileSetup";
 import { ProfileComplete } from "./components/ProfileComplete";
 import { IngredientsInput, CookingContext } from "./components/IngredientsInput";
-//import { RecipeRecommendation } from "./components/RecipeRecommendation";
-//import { RecipeDetail } from "./components/RecipeDetail";
 import { Feedback } from "./components/Feedback";
 import { VoiceAssistant } from "./components/VoiceAssistant";
-//import { RecipeIngredientCheck } from "./components/RecipeIngredientCheck";
-//import { CookingInProgress } from "./components/CookingInProgress";
 import { RecipeReview } from "./components/RecipeReview";
 import { TopNavBar } from "./components/TopNavBar";
 import { BottomNavBar } from "./components/BottomNavBar";
-import { RecipeListPage } from "./components/RecipeListPage";
-import type { Recipe as RecipeListRecipe } from "./types/recipe";
+import { RecipeListPage, type Recipe as RecipeListRecipe } from "./components/RecipeListPage";
 import { SavedPage } from "./components/SavedPage";
 import { MyPage } from "./components/MyPage";
 import { IngredientsManagement } from "./components/IngredientsManagement";
 import { AccountSettings } from "./components/AccountSettings";
 import { CommunityPage } from "./components/CommunityPage";
 import { CompletedRecipesPage } from "./components/CompletedRecipesPage";
-import { getCurrentUser, setAuthToken, removeAuthToken, updateProfile, saveRecipe, removeSavedRecipe,} from "./utils/api";
+import { getCurrentUser, setAuthToken, removeAuthToken, updateProfile, saveRecipe, removeSavedRecipe, getSavedRecipes} from "./utils/api";
 
 // [NEW IMPORT] FoodRecipe 컴포넌트와 FullRecipe 타입을 임포트
 import { FoodRecipe, FullRecipe } from "./components/FoodRecipe"; 
@@ -68,39 +63,56 @@ export default function App() {
 
 	// Check if user has an active session
 	useEffect(() => {
-		const checkSession = async () => {
-			try {
-				// Check if we have a stored auth token
-				const storedUser = sessionStorage.getItem("cooking_assistant_current_user");
-				
-				if (storedUser) {
-					const user = JSON.parse(storedUser);
+	const checkSession = async () => {
+		try {
+		const storedUser = sessionStorage.getItem("cooking_assistant_current_user");
 					
-					// Verify token with backend
-					try {
-						const response = await getCurrentUser();
+		if (storedUser) {
+			const cachedUser = JSON.parse(storedUser);
 						
-						if (response && response.user) {
-							setCurrentUser(response.user);
-							setIsAuthenticated(true);
-							setCurrentStep("home");
-						}
-					} catch (error) {
-						// Token invalid, clear session
-						console.error('Session verification failed:', error);
-						sessionStorage.removeItem("cooking_assistant_current_user");
-						removeAuthToken();
-					}
-				}
-			} catch (error) {
-				console.error('Error checking session:', error);
-			} finally {
-				setIsCheckingSession(false);
-			}
-		};
+			try {
+			const response = await getCurrentUser();  // { user, profile }
 
-		checkSession();
+			if (response && response.user) {
+				// 백엔드에서 받은 최신 정보 기준으로 세팅
+				const user = {
+				...cachedUser,
+				...response.user,
+				};
+
+				setCurrentUser(user);
+				setIsAuthenticated(true);
+				setCurrentStep("home");
+				try {
+				const list = await getSavedRecipes();
+				setSavedRecipes(list);
+				localStorage.setItem("cooking_assistant_saved_recipes", JSON.stringify(list));
+				} catch (e) {
+				console.error("Failed to load saved recipes from server:", e);
+				}
+
+				// 세션에도 다시 저장 (혹시 구조 바뀌었을 때)
+				sessionStorage.setItem(
+				"cooking_assistant_current_user",
+				JSON.stringify(user)
+				);
+			}
+			} catch (error) {
+			console.error('Session verification failed:', error);
+			sessionStorage.removeItem("cooking_assistant_current_user");
+			removeAuthToken();
+			}
+		}
+		} catch (error) {
+		console.error('Error checking session:', error);
+		} finally {
+		setIsCheckingSession(false);
+		}
+	};
+
+	checkSession();
 	}, []);
+
 
 	// Load dark mode preference and user profile
 	useEffect(() => {
@@ -196,15 +208,25 @@ export default function App() {
 		}
 	};
 
-	const handleAuthSuccess = (userName: string) => {
-		const user = sessionStorage.getItem("cooking_assistant_current_user");
-		if (user) {
-			setCurrentUser(JSON.parse(user));
-		}
-		setIsAuthenticated(true);
-		setPageHistory([]); // 로그인 시 히스토리 초기화
-		setCurrentStep("home");
+	const handleAuthSuccess = async (userName: string) => {
+  	const user = sessionStorage.getItem("cooking_assistant_current_user");
+  	if (user) {
+    setCurrentUser(JSON.parse(user));
+  	}
+  	setIsAuthenticated(true);
+  	setPageHistory([]);
+  	setCurrentStep("home");
+
+  	// 🔹 로그인 직후에도 DB에서 저장 레시피 가져오기
+  	try {
+    	const list = await getSavedRecipes();
+    	setSavedRecipes(list);
+    	localStorage.setItem("cooking_assistant_saved_recipes", JSON.stringify(list));
+  		} catch (e) {
+    	console.error("Failed to load saved recipes after login:", e);
+  		}
 	};
+
 
 	const handleLogout = () => {
 		sessionStorage.removeItem("cooking_assistant_current_user");
@@ -224,12 +246,27 @@ export default function App() {
 	};
 
 	const handleProfileComplete = (profile: UserProfile) => {
-		setUserProfile(profile);
-		// Save profile to localStorage
-		localStorage.setItem("cooking_assistant_user_profile", JSON.stringify(profile));
-		// 프로필 저장 후 이전 페이지로 이동
-		handleBackNavigation();
-	};
+    // 1) Update frontend state
+    setUserProfile(profile);
+
+    // 2) Save to localStorage
+    localStorage.setItem("cooking_assistant_user_profile", JSON.stringify(profile));
+
+    // 3) Save to DB (백엔드)
+    updateProfile({
+      allergies: profile.allergies,
+      preferences: profile,
+    })
+      .then(() => {
+        console.log("프로필이 DB에 성공적으로 저장되었습니다.");
+      })
+      .catch((err) => {
+        console.error("프로필 DB 저장 실패:", err);
+      });
+
+    // 4) Navigate back
+    handleBackNavigation();
+  };
 
 	const handleQuickRecommendation = () => {
 		setCookingContext(null);
@@ -534,12 +571,14 @@ export default function App() {
 			)}
 
 			{currentStep === "saved" && (
-				<SavedPage 
-					savedRecipes={savedRecipes}
-					onRecipeClick={(recipe) => handleRecipeClick(recipe.id)} // [MODIFIED] 새로운 핸들러 사용, ID 전달
-					onRemoveSaved={handleToggleSaveRecipe}
-				/>
+  			<SavedPage savedRecipes={savedRecipes}
+    		// SavedPage는 id를 넘겨주니까 그대로 id를 받으면 됨
+    		onRecipeClick={(id) => handleRecipeClick(id)}
+    		// 또는 더 간단히: onRecipeClick={handleRecipeClick}
+    		onRemoveSaved={handleToggleSaveRecipe}
+  			/>
 			)}
+
 
 			{currentStep === "mypage" && (
 				<MyPage

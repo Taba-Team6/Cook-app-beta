@@ -79,18 +79,51 @@ export async function getProfile() {
   return apiCall("/profile", {}, true);
 }
 
-export async function updateProfile(profileData: any) {
-  return apiCall(
-    "/profile",
-    { method: "PUT", body: JSON.stringify(profileData) },
-    true
-  );
+export async function updateProfile(data: {
+  name?: string;
+  allergies?: string[];
+  preferences?: any;
+}) {
+  const token = localStorage.getItem("cooking_assistant_token"); // 프로젝트에서 실제로 쓰는 저장소 이름 확인해서 맞춰줘
+
+  const res = await fetch(`${API_BASE_URL}/profile`, {
+    method: "PUT",
+    headers: {  
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("updateProfile 실패:", res.status, errorBody);
+    throw new Error("Failed to update profile");
+  }
+
+  return res.json(); // { profile: ... } 형태로 백엔드에서 보내줌
 }
 
-// 프론트에서 import하는 함수 (없으면 오류남)
+// 프론트에서 import하는 함수
 export async function getCurrentUser() {
-  return getProfile();
+  const res = await getProfile();     // { profile: {...} }
+  const profile = res.profile;
+
+  // App.tsx에서 기대하는 user 형태로 변환
+  const user = {
+    id: profile.id,
+    email: profile.email,
+    name: profile.name,
+  };
+
+  return {
+    user,
+    profile,
+  };
 }
+
+
+
 
 // ===============================
 // INGREDIENTS
@@ -128,12 +161,13 @@ export async function deleteIngredient(id: string) {
 // SAVED RECIPES
 // ===============================
 export async function getSavedRecipes() {
-  const res = await apiCall("/recipes", {}, true);  // ✅ 수정
-  return {
-    // 백엔드에서 recipes 라는 이름으로 보내주니까 거기에 먼저 맞춰줌
-    savedRecipes: res.recipes || res.data || res.savedRecipes || [],
-  };
+  const res = await apiCall("/recipes", {}, true);
+  // 백엔드에서 { recipes: [...] } 형태로 보내준다고 가정
+  const list = res.recipes || res.data || res.savedRecipes || [];
+  return list;  // 🔥 배열 자체를 반환
 }
+
+
 
 export async function saveRecipe(recipeData: any) {
   const payload = {

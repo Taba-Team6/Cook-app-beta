@@ -48,6 +48,11 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         return;
       }
 
+      // ✅ 여기 추가: 받은 JWT 토큰을 세션 스토리지에 저장
+      if (response.token) {
+        setAuthToken(response.token);
+      }
+
       // Store user info in session storage
       const userName = response.user.name || loginEmail.split('@')[0];
       sessionStorage.setItem("cooking_assistant_current_user", JSON.stringify({
@@ -109,6 +114,10 @@ export function Auth({ onAuthSuccess }: AuthProps) {
         setLoading(false);
         setActiveTab("login");
         return;
+      }
+
+      if (response.token) {
+        setAuthToken(response.token);
       }
 
       // Store user info in session storage
