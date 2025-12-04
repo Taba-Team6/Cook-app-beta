@@ -24,6 +24,8 @@ import { CompletedRecipesPage } from "./components/CompletedRecipesPage";
 //import type { Recipe } from "./components/RecipeRecommendation"; // VoiceAssistant에서 레시피 목록용으로 잠시 유지
 import { getCurrentUser, setAuthToken, removeAuthToken, updateProfile } from "./utils/api";
 import type { Recipe as RecipeListRecipe } from "./components/RecipeListPage";
+import { OnboardingGuide } from "./components/OnboardingGuide";
+
 
 
 type AppStep = "auth" | "home" | "profile" | "profile-complete" | "ingredients" | "recommendations" | "recipe" | "feedback" | "voice-assistant" | "ingredient-check" | "cooking-in-progress" | "recipe-list" | "saved" | "mypage" | "ingredients-management" | "account-settings" | "recipe-review" | "community" | "completed-recipes";
@@ -62,6 +64,20 @@ export default function App() {
   const [completedRecipes, setCompletedRecipes] = useState<CompletedRecipe[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("전체");
   const [savedRecipes, setSavedRecipes] = useState<RecipeListRecipe[]>([]);
+  const [showOnboarding, setShowOnboarding] = useState(false); // ✅ 추가
+
+  // 로그인 + home 진입 시, 처음 사용자라면 온보딩 표시
+  useEffect(() => {
+    if (isAuthenticated && currentStep === "home" && currentUser) {
+      const key = `cooking_assistant_onboarding_shown_${currentUser.id}`;
+      const flag = localStorage.getItem(key);
+
+      if (flag !== "true") {
+        setShowOnboarding(true);
+      }
+    }
+  }, [isAuthenticated, currentStep, currentUser]);
+
 
   // Check if user has an active session
   useEffect(() => {
@@ -253,6 +269,14 @@ export default function App() {
     navigateToStep("ingredients");
   };
 
+  const handleOnboardingFinish = () => {
+    setShowOnboarding(false);
+    if (currentUser) {
+      const key = `cooking_assistant_onboarding_shown_${currentUser.id}`;
+      localStorage.setItem(key, "true");
+    }
+  };
+  
   // 1. 레시피 상세 페이지 (RecipeDetail)를 바로 보여주기 위한 핸들러 (추천 페이지에서 사용)
   const handleRecipeSelect = async (recipeId: string) => {
     try {
@@ -431,7 +455,7 @@ export default function App() {
   };
 
   // 네비게이션 바 표시 여부 결정
-  const shouldShowNavigation = isAuthenticated && currentStep !== "auth";
+  const shouldShowNavigation = isAuthenticated && currentStep !== "auth" && !showOnboarding;
 
   // 하단 네비게이션 활성 탭 결정
   const getActiveBottomTab = () => {
@@ -457,11 +481,11 @@ export default function App() {
     }
   };
 
-  // 뒤로가기 버튼 표시 여부 결정
+    // 뒤로가기 버튼 표시 여부 결정
   const shouldShowBackButton = currentStep !== "home" && currentStep !== "auth";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       {/* 상단 네비게이션 바 */}
       {shouldShowNavigation && (
         <TopNavBar
@@ -478,114 +502,128 @@ export default function App() {
         />
       )}
 
-      {/* 메인 컨텐츠 */}
-      {currentStep === "auth" && !isAuthenticated && (
-        <Auth onAuthSuccess={handleAuthSuccess} />
-      )}
+      {/* 🧡 스크롤되는 메인 영역 + 하단 네비 높이만큼 패딩 */}
+      <main className="flex-1 pb-2flex-1 overflow-y-auto pb-24">
+        {/* 로그인/회원가입 */}
+        {currentStep === "auth" && !isAuthenticated && (
+          <Auth onAuthSuccess={handleAuthSuccess} />
+        )}
 
-      {currentStep === "home" && isAuthenticated && (
-        <HomePage 
-          onGetStarted={handleGetStarted} 
-          onVoiceAssistant={handleVoiceAssistant}
-          onLogout={handleLogout} 
-          userName={currentUser?.name}
-          onCommunityClick={() => navigateToStep("community")}
-          userProfile={userProfile}
-          onCategoryClick={(category) => {
-            setSelectedCategory(category);
-            navigateToStep("recipe-list");
-          }}
-          onIngredientsClick={() => navigateToStep("ingredients-management")}
-        />
-      )}
+        {/* 홈 */}
+        {currentStep === "home" && isAuthenticated && (
+          <>
+            <HomePage 
+              onGetStarted={handleGetStarted} 
+              onVoiceAssistant={handleVoiceAssistant}
+              onLogout={handleLogout} 
+              userName={currentUser?.name}
+              onCommunityClick={() => navigateToStep("community")}
+              userProfile={userProfile}
+              onCategoryClick={(category) => {
+                setSelectedCategory(category);
+                navigateToStep("recipe-list");
+              }}
+              onIngredientsClick={() => navigateToStep("ingredients-management")}
+            />
 
-      {currentStep === "voice-assistant" && isAuthenticated && (
-        <VoiceAssistant 
-          onRecipeSelect={handleVoiceRecipeSelect}
-          onBack={handleBackNavigation}
-          userProfile={userProfile}
-        />
-      )}
+            {showOnboarding && (
+              <OnboardingGuide onFinish={handleOnboardingFinish} />
+            )}
+          </>
+        )}
 
-      
+        {/* 음성 어시스턴트 */}
+        {currentStep === "voice-assistant" && isAuthenticated && (
+          <VoiceAssistant 
+            onRecipeSelect={handleVoiceRecipeSelect}
+            onBack={handleBackNavigation}
+            userProfile={userProfile}
+          />
+        )}
 
-      {/* ✅ selectedRecipe 타입: RecipeDetailData */}
-      
+        {/* 프로필 설정 */}
+        {currentStep === "profile" && isAuthenticated && (
+          <ProfileSetup 
+            onComplete={handleProfileComplete} 
+            onBack={handleBackNavigation}
+            initialProfile={userProfile}
+          />
+        )}
 
-      {currentStep === "profile" && isAuthenticated && (
-        <ProfileSetup 
-          onComplete={handleProfileComplete} 
-          onBack={handleBackNavigation}
-          initialProfile={userProfile}
-        />
-      )}
+        {/* 프로필 완료 */}
+        {currentStep === "profile-complete" && userProfile && (
+          <ProfileComplete
+            profile={userProfile}
+            onQuickRecommendation={handleQuickRecommendation}
+            onDetailedRecommendation={handleDetailedRecommendation}
+            onBack={handleBackNavigation}
+          />
+        )}
 
-      {currentStep === "profile-complete" && userProfile && (
-        <ProfileComplete
-          profile={userProfile}
-          onQuickRecommendation={handleQuickRecommendation}
-          onDetailedRecommendation={handleDetailedRecommendation}
-          onBack={handleBackNavigation}
-        />
-      )}
+        {/* 레시피 리스트 */}
+        {currentStep === "recipe-list" && (
+          <RecipeListPage 
+            onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe)} 
+            initialCategory={selectedCategory}
+            savedRecipes={savedRecipes}
+            onToggleSave={handleToggleSaveRecipe}
+          />
+        )}
 
+        {/* 저장한 레시피 */}
+        {currentStep === "saved" && (
+          <SavedPage 
+            savedRecipes={savedRecipes}
+            onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe)} 
+            onRemoveSaved={handleToggleSaveRecipe}
+          />
+        )}
 
+        {/* 마이페이지 */}
+        {currentStep === "mypage" && (
+          <MyPage
+            userName={currentUser?.name}
+            onProfileEdit={() => navigateToStep("profile")}
+            onAccountSettings={() => navigateToStep("account-settings")}
+            onSavedRecipes={() => navigateToStep("saved")}
+            onCompletedRecipes={() => navigateToStep("completed-recipes")}
+            completedRecipesCount={completedRecipes.length}
+            savedRecipesCount={savedRecipes.length}
+          />
+        )}
 
-      {currentStep === "recipe-list" && (
-        <RecipeListPage 
-          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe)} // ✅ 핸들러 변경
-          initialCategory={selectedCategory}
-          savedRecipes={savedRecipes}
-          onToggleSave={handleToggleSaveRecipe}
-        />
-      )}
+        {/* 재료 관리 */}
+        {currentStep === "ingredients-management" && (
+          <IngredientsManagement />
+        )}
 
-      {currentStep === "saved" && (
-        <SavedPage 
-          savedRecipes={savedRecipes}
-          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe)}// ✅ 핸들러 변경
-          onRemoveSaved={handleToggleSaveRecipe}
-        />
-      )}
+        {/* 계정 설정 */}
+        {currentStep === "account-settings" && (
+          <AccountSettings onBack={handleBackNavigation} />
+        )}
 
-      {currentStep === "mypage" && (
-        <MyPage
-          userName={currentUser?.name}
-          onProfileEdit={() => navigateToStep("profile")}
-          onAccountSettings={() => navigateToStep("account-settings")}
-          onSavedRecipes={() => navigateToStep("saved")}
-          onCompletedRecipes={() => navigateToStep("completed-recipes")}
-          completedRecipesCount={completedRecipes.length}
-          savedRecipesCount={savedRecipes.length}
-        />
-      )}
+        {/* 레시피 리뷰 */}
+        {currentStep === "recipe-review" && isAuthenticated && selectedRecipe && (
+          <RecipeReview
+            recipe={selectedRecipe}
+            onSubmit={handleReviewSubmit}
+            onSkip={handleReviewSkip}
+          />
+        )}
 
-      {currentStep === "ingredients-management" && (
-        <IngredientsManagement />
-      )}
+        {/* 커뮤니티 */}
+        {currentStep === "community" && (
+          <CommunityPage />
+        )}
 
-      {currentStep === "account-settings" && (
-        <AccountSettings onBack={handleBackNavigation} />
-      )}
-
-      {currentStep === "recipe-review" && isAuthenticated && selectedRecipe && (
-        <RecipeReview
-          recipe={selectedRecipe} // ✅ selectedRecipe 타입: RecipeDetailData
-          onSubmit={handleReviewSubmit}
-          onSkip={handleReviewSkip}
-        />
-      )}
-
-      {currentStep === "community" && (
-        <CommunityPage />
-      )}
-
-      {currentStep === "completed-recipes" && (
-        <CompletedRecipesPage 
-          completedRecipes={completedRecipes}
-          onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe.id)} // ✅ 핸들러 변경
-        />
-      )}
+        {/* 완료한 레시피 목록 */}
+        {currentStep === "completed-recipes" && (
+          <CompletedRecipesPage 
+            completedRecipes={completedRecipes}
+            onRecipeClick={(recipe) => handleRecipeSelectForCheck(recipe.id)}
+          />
+        )}
+      </main>
 
       {/* 하단 네비게이션 바 */}
       {shouldShowNavigation && (
@@ -598,6 +636,6 @@ export default function App() {
           onMyPageClick={() => navigateToStep("mypage")}
         />
       )}
-    </div> 
+    </div>
   );
 }
