@@ -1,3 +1,5 @@
+console.log("✅ RECEIPT ROUTES INDEX LOADED");
+
 // ================================
 // 📌 통합 서버 index.js (완전본)
 // ================================
@@ -15,6 +17,8 @@ import aiRoutes from './routes/ai.js';
 
 // 🔥 새로 추가될 라우트들 (두번째 서버)
 import sttRoutes from './routes/sttRoutes.js';
+import receiptRoutes from './routes/receiptRoutes.js';
+import completedRecipesRoutes from './routes/completedRecipes.js';
 //import savedRecipeRoutes from './routes/savedRecipeRoutes.js';
 
 dotenv.config();
@@ -77,6 +81,12 @@ app.use('/api/profile', profileRoutes);
 app.use('/api/ingredients', ingredientsRoutes);
 app.use('/api/recipes', recipesRoutes);
 app.use('/api', aiRoutes);
+
+// 🔥 영수증 OCR + 자동 재료 등록
+app.use('/api/receipt', receiptRoutes);
+
+// 🔥 완료한 요리
+app.use('/api/completed-recipes', completedRecipesRoutes);
 
 // 🔥 saved recipes
 //app.use('/api/saved-recipes', savedRecipeRoutes);

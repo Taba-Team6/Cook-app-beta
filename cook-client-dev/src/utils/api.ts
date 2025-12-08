@@ -84,17 +84,25 @@ export async function updateProfile(data: {
   allergies?: string[];
   preferences?: any;
 }) {
-  // 🔥 따로 토큰 꺼낼 필요 없이 apiCall 사용
-  return apiCall(
-    "/profile",
-    {
-      method: "PUT",
-      body: JSON.stringify(data),
-    },
-    true // ✅ 인증 필요한 요청이니까 true
-  );
-}
+  const token = localStorage.getItem("cooking_assistant_token"); // 프로젝트에서 실제로 쓰는 저장소 이름 확인해서 맞춰줘
 
+  const res = await fetch(`${API_BASE_URL}/profile`, {
+    method: "PUT",
+    headers: {  
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("updateProfile 실패:", res.status, errorBody);
+    throw new Error("Failed to update profile");
+  }
+
+  return res.json(); // { profile: ... } 형태로 백엔드에서 보내줌
+}
 
 // 프론트에서 import하는 함수
 export async function getCurrentUser() {
@@ -148,6 +156,27 @@ export async function updateIngredient(id: string, data: any) {
 export async function deleteIngredient(id: string) {
   return apiCall(`/ingredients/${id}`, { method: "DELETE" }, true);
 }
+
+// ✅ 영수증 OCR 파싱 (수정본)
+export async function parseReceiptImage(formData: FormData) {
+  const res = await fetch(
+    "http://localhost:3001/api/receipt/parse",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "영수증 분석 실패");
+  }
+
+  return res.json(); // { success: true, ingredients: [...] }
+}
+
+
+
 
 // ===============================
 // SAVED RECIPES
@@ -315,3 +344,153 @@ export async function textToSpeech(text: string) {
 export async function healthCheck() {
   return apiCall("/health");
 }
+
+// ===============================
+// COMPLETED RECIPES
+// ===============================
+// 프론트에서 쓸 재료 타입
+export type CompletedIngredient = {
+  name: string;
+  amount: string;
+};
+
+// ⬇️ 서버에서 오는 한 줄(ROW) 모양
+interface CompletedRecipeRow {
+  id: string;              // completed_recipes.id
+  user_id: string;
+  recipe_id: string;
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  cooking_method: string | null;
+  hashtags: string | null;
+  ingredients_json: string | null;   // JSON 문자열
+  steps_json: string | null;         // JSON 문자열
+  cooking_time: string | number | null;
+  servings: string | number | null;
+  difficulty: string | null;
+  completed_at: string;             // DATETIME → 문자열
+}
+
+// ⬇️ 프론트에서 상태/화면에 쓸 최종 타입
+export interface CompletedRecipe {
+  id: string;                        // 여기서는 recipe_id 로 통일
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  cooking_method: string | null;
+  hashtags: string | null;
+  ingredients: CompletedIngredient[];
+  steps: string[];
+  completedAt: string;
+  cookingTime?: string | number | null;
+  servings?: string | number | null;
+  difficulty?: string | null;
+}
+
+// ⬇️ 서버에 저장할 때(POST) 쓰는 payload
+export interface CompletedRecipePayload {
+  id: string;              // recipe_id
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  // ✅ 필수 → 선택(Optional)로 변경
+  cooking_method?: string | null;
+  hashtags?: string | null;
+  
+  ingredients: CompletedIngredient[]; // 배열 그대로 보냄
+  steps: string[];                    // 배열 그대로 보냄
+  completedAt: string;
+  cookingTime?: string | number | null;
+  servings?: string | number | null;
+  difficulty?: string | null;
+}
+
+// 한 건 추가 (POST)
+export async function addCompletedRecipe(payload: CompletedRecipePayload) {
+  return apiCall(
+    "/completed-recipes",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    true
+  );
+}
+
+// 목록 가져오기 (GET) → CompletedRecipe[] 로 변환해서 반환
+export async function getCompletedRecipes(): Promise<CompletedRecipe[]> {
+  const res = await apiCall("/completed-recipes", {}, true);
+  const rows = (res.recipes ?? []) as CompletedRecipeRow[];
+
+  return rows.map((r) => {
+    let ingredients: CompletedIngredient[] = [];
+    let steps: string[] = [];
+
+    // ---------- 재료 파싱 ----------
+    try {
+      const raw =
+        typeof r.ingredients_json === "string"
+          ? JSON.parse(r.ingredients_json)
+          : r.ingredients_json;
+
+      if (Array.isArray(raw)) {
+        ingredients = raw.map((item: any) => ({
+          name:
+            item.name ??
+            item.ingredient ??
+            item.ingredientName ??
+            item.item ??
+            "",
+          amount:
+            item.amount ??
+            item.quantity ??
+            item.qty ??
+            "",
+        }));
+      }
+    } catch (e) {
+      console.error(
+        "Failed to parse ingredients_json",
+        e,
+        r.ingredients_json
+      );
+    }
+
+    // ---------- 단계(steps) 파싱 ----------
+    try {
+      const rawSteps =
+        typeof r.steps_json === "string"
+          ? JSON.parse(r.steps_json)
+          : r.steps_json;
+
+      if (Array.isArray(rawSteps)) {
+        steps = rawSteps.map((s: any) => String(s));
+      }
+    } catch (e) {
+      console.error("Failed to parse steps_json", e, r.steps_json);
+    }
+
+    return {
+      id: r.recipe_id,                      // 우리가 쓸 "레시피 id"
+      name: r.name,
+      image: r.image,
+      description: r.description,
+      category: r.category,
+      cooking_method: r.cooking_method,
+      hashtags: r.hashtags,
+      ingredients,
+      steps,
+      completedAt: r.completed_at ?? "",
+      cookingTime: r.cooking_time ?? null,
+      servings: r.servings ?? null,
+      difficulty: r.difficulty ?? null,
+    };
+  });
+}
+
+
+

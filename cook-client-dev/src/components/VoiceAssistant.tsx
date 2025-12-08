@@ -1,4 +1,4 @@
-// === VoiceAssistant.tsx — Wakeword + 동일 처리 + 무음 종료 (FINAL FULL VERSION) ===
+// === VoiceAssistant.tsx — Wakeword + 동일 처리 + 무음 종료 (MERGED VERSION) ===
 import { useState, useRef, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
@@ -12,6 +12,7 @@ import { speakText, stopSpeaking } from "../utils/tts";
 import { Progress } from "./ui/progress";
 import type { UserProfile } from "./ProfileSetup";
 import type { FullRecipe } from "./FoodRecipe";
+import { addCompletedRecipe } from "../utils/api";
 
 
 // ===============================
@@ -22,8 +23,9 @@ interface VoiceAssistantProps {
   onBack: () => void;
   initialRecipe?: Recipe | null;
   userProfile: UserProfile | null;
+  onCookingComplete?: (recipe: Recipe) => void;
 
-  // ⭐ App.tsx에서 넘기고 있는 prop (필수 추가)
+  // ★ FoodRecipe에서 넘어오는 전체 레시피(DB 기반)
   initialRecipeContext?: FullRecipe | null;
 }
 
@@ -59,15 +61,19 @@ export function VoiceAssistant({
   onBack,
   initialRecipe,
   userProfile,
+  onCookingComplete,
+  initialRecipeContext,
 }: VoiceAssistantProps) {
-
   // ====== 상태 ======
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [textInput, setTextInput] = useState("");
+  const [voiceFatalError, setVoiceFatalError] = useState(false);
 
-  const [recipeInfo, setRecipeInfo] = useState<Recipe | null>(initialRecipe ?? null);
+  const [recipeInfo, setRecipeInfo] = useState<Recipe | null>(
+    initialRecipe ?? null
+  );
   const [ingredientsChecked, setIngredientsChecked] = useState(false);
   const [cookingStarted, setCookingStarted] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -84,6 +90,9 @@ export function VoiceAssistant({
   const commandRecognizerRef = useRef<any | null>(null);
   const silenceTimerRef = useRef<number | null>(null);
 
+  // ❗ 치명적인 에러(not-allowed) 발생 시 자동 재시작 막기 위한 플래그
+  const hardErrorRef = useRef(false);
+
   // keep wake active ref synced
   useEffect(() => {
     isWakeActiveRef.current = isWakeActive;
@@ -94,25 +103,124 @@ export function VoiceAssistant({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // ===============================
   // 초기 레시피 세팅
+  //  - initialRecipe(이미 Recipe 형태)가 있으면 그대로 사용
+  //  - 없으면 FullRecipe(initialRecipeContext)를 Recipe로 변환해서 사용
+  // ===============================
   useEffect(() => {
-    if (!initialRecipe) return;
+    let base: Recipe | null = initialRecipe ?? null;
 
-    setRecipeInfo(initialRecipe);
+    // FullRecipe → Recipe 변환
+    if (!base && initialRecipeContext) {
+      const full = initialRecipeContext as any;
+
+      // 재료 문자열(fullIngredients)
+      const fullIngredients =
+        full.ingredients?.map((ing: any) =>
+          `• ${(ing.name ?? ing.ingredient ?? ing.title ?? "").trim()}${
+            ing.amount ?? ing.quantity ?? ing.volume
+              ? " " + (ing.amount ?? ing.quantity ?? ing.volume)
+              : ""
+          }`
+        ) ?? [];
+
+      // 단계 문자열 배열
+      const steps =
+        full.steps
+          ?.map((s: any) => {
+            if (!s) return "";
+            if (typeof s === "string") return s;
+
+            // 가장 흔한 필드들 먼저 시도
+            const candKeys = [
+              "description",
+              "step",
+              "content",
+              "text",
+              "instruction",
+              "instruction_text",
+            ];
+            for (const k of candKeys) {
+              if (typeof s[k] === "string" && s[k].trim()) return s[k];
+            }
+
+            // 그래도 없으면, 객체 안의 문자열 값들을 전부 이어붙이기
+            const vals = Object.values(s).filter(
+              (v) => typeof v === "string" && v.trim()
+            ) as string[];
+
+            return vals.join(" ");
+          })
+          .filter((line: string) => line && line.length > 0) ?? [];
+
+      base = {
+        id: full.id ?? crypto.randomUUID(),   // ✅ id 강제 생성
+        name: full.name,  
+        recipeName: full.name,
+        image: full.image ?? null,
+        fullIngredients,
+        ingredients:
+          full.ingredients?.map((ing: any) => ({
+            name: (ing.name ?? ing.ingredient ?? ing.title ?? "").trim(),
+            amount:
+              (ing.amount ?? ing.quantity ?? ing.volume ?? "")
+                .toString()
+                .trim(),
+          })) ?? [],
+        steps,
+      };
+    }
+
+    if (!base) return;
+
+    // 상태 초기화
+    setRecipeInfo(base);
     setIngredientsChecked(false);
     setCookingStarted(false);
     setCurrentStepIndex(0);
     setCompletedSteps([]);
     setIsFinished(false);
 
-    const ingredientsText = initialRecipe.fullIngredients?.join("\n") ?? "";
-    if (ingredientsText) {
+    // 재료 메시지 출력
+    const fullLines =
+      base.fullIngredients
+        ?.map((line: any) =>
+          typeof line === "string" ? line : String(line)
+        )
+        .filter((s: string) => s && s.trim().length > 0) ?? [];
+
+    const ingredientLines =
+      !fullLines.length && Array.isArray((base as any).ingredients)
+        ? (base as any).ingredients
+            .map((i: any) => {
+              if (typeof i === "string") return i;
+              const name = i.name ?? i.ingredient ?? i.title ?? "";
+              const amount = i.amount ?? i.quantity ?? i.qty ?? "";
+              if (!name && !amount) return "";
+              return amount ? `${name} ${amount}` : name;
+            })
+            .filter((s: string) => s && s.trim().length > 0)
+        : [];
+
+    const lines = fullLines.length > 0 ? fullLines : ingredientLines;
+    const title = base.recipeName ?? (base as any).name ?? "이 레시피";
+
+    if (lines.length > 0) {
       addMessage(
-        `${initialRecipe.recipeName ?? ""} 재료 목록입니다:\n${ingredientsText}\n\n빠진 재료가 있으면 말해주세요!`,
+        `${title} 재료 목록입니다:\n${lines.join(
+          "\n"
+        )}\n\n빠진 재료가 있으면 말해주세요!`,
+        "assistant"
+      );
+    } else {
+      addMessage(
+        `${title} 레시피의 재료 정보를 불러오지 못했어요.\n필요한 재료를 말로 알려주시면 도와드릴게요!`,
         "assistant"
       );
     }
-  }, [initialRecipe]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialRecipe, initialRecipeContext]);
 
   const totalSteps = recipeInfo?.steps?.length ?? 0;
   const completedCount = completedSteps.length;
@@ -121,14 +229,14 @@ export function VoiceAssistant({
   // 메시지 추가
   // ===============================
   const addMessage = (text: string, type: "assistant" | "user") => {
-    setMessages(prev => [
+    setMessages((prev) => [
       ...prev,
       {
         id: `${type}-${Date.now()}-${Math.random()}`,
         type,
         text,
         timestamp: new Date(),
-      }
+      },
     ]);
 
     if (type === "assistant") {
@@ -147,10 +255,16 @@ export function VoiceAssistant({
   // ===============================
   const isStartIntent = (text: string) => {
     const keywords = [
-      "시작", "시작해", "해줘", "가자",
-      "ㄱㄱ", "ㄱ", "스타트", "start"
+      "시작",
+      "시작해",
+      "해줘",
+      "가자",
+      "ㄱㄱ",
+      "ㄱ",
+      "스타트",
+      "start",
     ];
-    return keywords.some(kw => text.includes(kw));
+    return keywords.some((kw) => text.includes(kw));
   };
 
   // 단계 메시지
@@ -169,6 +283,8 @@ export function VoiceAssistant({
   // ===============================
   async function handleUserInput(rawText: string) {
     const text = normalizeText(rawText);
+    if (!text) return;
+
     addMessage(text, "user");
 
     // ===== 1) 처음 레시피 생성 =====
@@ -181,7 +297,9 @@ export function VoiceAssistant({
 
         setRecipeInfo(info);
         addMessage(
-          `${info.recipeName ?? ""} 재료 목록입니다:\n${info.fullIngredients.join("\n")}\n\n빠진 재료가 있으면 말해주세요!`,
+          `${info.recipeName ?? ""} 재료 목록입니다:\n${info.fullIngredients.join(
+            "\n"
+          )}\n\n빠진 재료가 있으면 말해주세요!`,
           "assistant"
         );
       } catch {
@@ -195,10 +313,8 @@ export function VoiceAssistant({
 
     // ===== 2) 재료 체크 단계 =====
     if (!ingredientsChecked) {
-
-      // "다 있어" 처리 강화
       const readyKeywords = ["다 있어", "다있어", "재료 다 있어", "재료다있어"];
-      if (readyKeywords.some(k => text.includes(k))) {
+      if (readyKeywords.some((k) => text.includes(k))) {
         setIngredientsChecked(true);
         addMessage("모든 재료가 준비되었군요! 요리를 시작할까요?", "assistant");
         return;
@@ -240,14 +356,14 @@ export function VoiceAssistant({
 
     // ===== 4) 단계 진행 =====
     if (
-      ["다음", "다했어", "됐어", "ㅇㅋ", "오케이"].some(kw =>
+      ["다음", "다했어", "됐어", "ㅇㅋ", "오케이"].some((kw) =>
         text.replace(/\s/g, "").includes(kw)
       )
     ) {
       const total = nowRecipe.steps?.length ?? 0;
 
       if (!completedSteps.includes(currentStepIndex)) {
-        setCompletedSteps(prev => [...prev, currentStepIndex]);
+        setCompletedSteps((prev) => [...prev, currentStepIndex]);
       }
 
       const next = currentStepIndex + 1;
@@ -275,6 +391,7 @@ export function VoiceAssistant({
       addMessage("다시 설명해줄래요?", "assistant");
     }
   }
+
   // ===============================
   // 텍스트 입력
   // ===============================
@@ -292,7 +409,7 @@ export function VoiceAssistant({
   };
 
   // ===============================
-  // 무음 타이머 관리
+  // 무음 타이머 관리 (2초)
   // ===============================
   const clearSilenceTimer = () => {
     if (silenceTimerRef.current !== null) {
@@ -318,6 +435,7 @@ export function VoiceAssistant({
   };
 
   const stopAllListening = () => {
+    hardErrorRef.current = false; // 버튼으로 끌 때는 에러 상태 리셋
     stopWakeListening();
     stopCommandListening();
     setIsWakeActive(false);
@@ -325,11 +443,10 @@ export function VoiceAssistant({
 
   const resetSilenceTimer = () => {
     clearSilenceTimer();
-    // 5초 동안 아무 말 없으면 자동으로 명령 인식 종료
+    // 2초 동안 아무 말 없으면 자동으로 명령 인식 종료
     silenceTimerRef.current = window.setTimeout(() => {
       stopCommandListening();
-      // 종료 후 다시 웨이크워드 모드로
-      if (isWakeActiveRef.current) {
+      if (isWakeActiveRef.current && !hardErrorRef.current) {
         startWakeListening();
       }
     }, 2000);
@@ -348,57 +465,114 @@ export function VoiceAssistant({
       return;
     }
 
-    // 혹시 켜져 있던 거 있으면 정리
     stopWakeListening();
+    hardErrorRef.current = false;
 
     const recognizer = new SpeechRecognition();
     recognizer.lang = "ko-KR";
     recognizer.continuous = true;
     recognizer.interimResults = true;
 
+    recognizer.onstart = () => {
+      console.log("[wake] onstart");
+      setIsWakeActive(true);
+    };
+
     recognizer.onresult = (e: any) => {
       const result = e.results[e.results.length - 1];
       const text: string = result[0].transcript || "";
       const normalized = text.replace(/\s+/g, "");
-      // "안녕" 감지되면 → 명령 듣기 모드로 전환
+
+      console.log("[wake] result:", text, "=>", normalized);
+
       if (normalized.includes("안녕")) {
+        console.log("[wake] '안녕' 감지 → command 모드로 전환");
         try {
           recognizer.onresult = null;
           recognizer.onend = null;
           recognizer.onerror = null;
+          recognizer.onstart = null;
           recognizer.stop();
-        } catch {}
-        // 바로 듣기 시작하면 자기 목소리 섞일 수 있으니 약간 딜레이
+        } catch (e) {
+          console.error("[wake] stop() error:", e);
+        }
         setTimeout(() => {
           startCommandListening();
         }, 500);
       }
     };
 
-    recognizer.onerror = () => {
-      // 에러 나면 웨이크 비활성화
-      setIsWakeActive(false);
+    recognizer.onerror = (e: any) => {
+      console.error("[wake] onerror:", e);
+
+      if (
+        e.error === "not-allowed" ||
+        e.error === "audio-capture" ||
+        e.error === "network" ||
+        e.error === "service-not-allowed"
+      ) {
+        hardErrorRef.current = true;
+        isWakeActiveRef.current = false;
+        setIsWakeActive(false);
+        setVoiceFatalError(true);
+
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          toast.error("브라우저에서 이 사이트의 마이크 사용이 차단되어 있어요.");
+        } else if (e.error === "audio-capture") {
+          toast.error("마이크 장치를 찾을 수 없어요. 시스템 설정을 확인해주세요.");
+        } else if (e.error === "network") {
+          toast.error(
+            "이 네트워크에서는 음성 인식 서버에 연결할 수 없어 자동 듣기를 사용할 수 없어요."
+          );
+        }
+        return;
+      }
+
+      console.log("[wake] non-fatal error:", e.error);
     };
 
     recognizer.onend = () => {
-      // 명령 듣는 중이 아니고, 웨이크 모드가 활성화 상태면 다시 켠다
-      if (!isListening && isWakeActiveRef.current) {
-        try {
-          recognizer.start();
-        } catch {
-          // 여기서 실패하면 웨이크 끔
-          setIsWakeActive(false);
-        }
+      console.log(
+        "[wake] onend, isWakeActiveRef.current =",
+        isWakeActiveRef.current,
+        "isListening =",
+        isListening,
+        "hardErrorRef =",
+        hardErrorRef.current
+      );
+
+      if (wakeRecognizerRef.current !== recognizer) {
+        return;
       }
+
+      if (!isWakeActiveRef.current || hardErrorRef.current) {
+        console.log("[wake] stop: auto-restart disabled (user off or hardError)");
+        wakeRecognizerRef.current = null;
+        return;
+      }
+
+      setTimeout(() => {
+        if (!isWakeActiveRef.current || hardErrorRef.current) return;
+        try {
+          console.log("[wake] restart start()");
+          recognizer.start();
+        } catch (err) {
+          console.error("[wake] restart error:", err);
+          wakeRecognizerRef.current = null;
+          hardErrorRef.current = true;
+        }
+      }, 300);
     };
 
     wakeRecognizerRef.current = recognizer;
 
     try {
+      console.log("[wake] start() 호출");
       recognizer.start();
-      setIsWakeActive(true);
-    } catch {
+    } catch (e) {
+      console.error("[wake] start() 예외:", e);
       setIsWakeActive(false);
+      hardErrorRef.current = true;
       toast.error("웨이크워드 인식을 시작할 수 없습니다.");
     }
   };
@@ -416,15 +590,17 @@ export function VoiceAssistant({
       return;
     }
 
-    // 혹시 남아 있는 명령 인식기 정리
+    if (hardErrorRef.current) {
+      console.warn("[cmd] hardErrorRef=true → startCommandListening 생략");
+      return;
+    }
+
     stopCommandListening();
     clearSilenceTimer();
 
-    // TTS 중이면 끄고 시작
     stopSpeaking();
     setIsSpeaking(false);
 
-    // 웨이크워드 인식은 잠깐 정지
     if (wakeRecognizerRef.current) {
       stopWakeListening();
     }
@@ -440,7 +616,8 @@ export function VoiceAssistant({
       const result = e.results[e.results.length - 1];
       const text: string = result[0].transcript || "";
 
-      // 무음 타이머 리셋
+      console.log("[cmd] partial:", text);
+
       resetSilenceTimer();
 
       if (result.isFinal) {
@@ -448,11 +625,37 @@ export function VoiceAssistant({
       }
     };
 
-    recognizer.onerror = () => {
+    recognizer.onerror = (e: any) => {
+      console.error("[cmd] onerror:", e);
+
+      if (
+        e.error === "not-allowed" ||
+        e.error === "audio-capture" ||
+        e.error === "network" ||
+        e.error === "service-not-allowed"
+      ) {
+        hardErrorRef.current = true;
+        setVoiceFatalError(true);
+
+        if (e.error === "network") {
+          toast.error(
+            "이 네트워크에서는 음성 인식 서버에 연결할 수 없어 음성 기능을 사용할 수 없어요."
+          );
+        } else {
+          toast.error(
+            "마이크 권한 / 장치 문제로 음성 인식을 사용할 수 없어요."
+          );
+        }
+
+        stopAllListening();
+        return;
+      }
+
       toast.error("음성 인식 중 오류가 발생했어요.");
     };
 
     recognizer.onend = async () => {
+      console.log("[cmd] onend, finalText =", finalText);
       clearSilenceTimer();
       setIsListening(false);
       commandRecognizerRef.current = null;
@@ -462,18 +665,19 @@ export function VoiceAssistant({
         await handleUserInput(trimmed);
       }
 
-      // 명령 듣기 끝나면 다시 웨이크 모드로 복귀
-      if (isWakeActiveRef.current) {
+      if (isWakeActiveRef.current && !hardErrorRef.current) {
         startWakeListening();
       }
     };
 
     try {
+      console.log("[cmd] start() 호출");
       recognizer.start();
       commandRecognizerRef.current = recognizer;
       setIsListening(true);
       resetSilenceTimer();
-    } catch {
+    } catch (e) {
+      console.error("[cmd] start() 예외:", e);
       toast.error("명령 인식을 시작할 수 없습니다.");
     }
   };
@@ -481,15 +685,66 @@ export function VoiceAssistant({
   // ===============================
   // 요리 완료
   // ===============================
-  const handleCompleteCooking = () => {
+  const handleCompleteCooking = async () => {
     if (!recipeInfo) return;
+
     stopSpeaking();
     setIsSpeaking(false);
-    onRecipeSelect(recipeInfo);
+
+    try {
+      const payload = {
+        // ✅ ⭐️ 이게 제일 중요
+        id: recipeInfo.id ?? crypto.randomUUID(),
+
+        name: recipeInfo.name ?? recipeInfo.recipeName ?? "이름 없는 레시피",
+        image: recipeInfo.image ?? null,
+        description: recipeInfo.description ?? null,
+        category: recipeInfo.category ?? "기타",
+
+        // ✅ ⭐️ ingredients 구조 반드시 맞춰야 함
+        ingredients: Array.isArray(recipeInfo.ingredients)
+          ? recipeInfo.ingredients.map((ing: any) =>
+              typeof ing === "string"
+                ? { name: ing, amount: "" }
+                : {
+                    name: ing.name ?? "",
+                    amount: ing.amount ?? "",
+                  }
+            )
+          : [],
+
+        // ✅ steps는 문자열 배열 OK
+        steps: Array.isArray(recipeInfo.steps)
+          ? recipeInfo.steps.map((s: any) => String(s))
+          : [],
+
+        completedAt: new Date().toISOString(),
+
+        cookingTime: recipeInfo.cookingTime ?? null,
+        servings: recipeInfo.servings ?? null,
+        difficulty: recipeInfo.difficulty ?? null,
+      };
+
+      console.log("✅ 최종 전송 payload:", payload);
+
+      await addCompletedRecipe(payload);
+
+      console.log("✅ DB 저장 성공");
+
+      onCookingComplete?.(recipeInfo);
+      onRecipeSelect(recipeInfo);
+
+    } catch (err) {
+      console.error("❌ 완료 레시피 저장 실패:", err);
+      toast.error("완료한 레시피 저장에 실패했습니다.");
+    }
   };
 
+
+
+
   // ===============================
-  // 진행률 계산 (TS 에러 안 나게 방어)
+  // 진행률 계산
   // ===============================
   const totalForProgress = recipeInfo?.steps ? recipeInfo.steps.length : 0;
   const progressValue =
@@ -497,21 +752,15 @@ export function VoiceAssistant({
       ? Math.round((completedCount / totalForProgress) * 100)
       : 0;
 
+
   // ===============================
   // UI
   // ===============================
   return (
-    <div className="min-h-screen bg-background pt-20 pb-24">
+    <div className="h-screen bg-background pt-20 pb-24">
       <div className="max-w-3xl mx-auto px-4">
 
-        {/* 뒤로가기 */}
-        <Button
-          variant="ghost"
-          onClick={onBack}
-          className="mb-4 flex items-center gap-2"
-        >
-          ← 뒤로가기
-        </Button>
+        
 
         {/* 상단 상태 카드 */}
         <Card className="mb-4 border bg-primary/5 border-primary/20">
@@ -521,7 +770,7 @@ export function VoiceAssistant({
               {/* 제목 + 설명 + 진행률 */}
               <div className="flex-1">
                 <h2 className="text-lg font-bold">
-                  {recipeInfo?.recipeName ?? "AI 음성 요리 도우미"}
+                  {recipeInfo?.recipeName ?? recipeInfo?.name ?? "AI 음성 요리 도우미"}
                 </h2>
 
                 <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">
@@ -579,7 +828,7 @@ export function VoiceAssistant({
           <CardContent className="p-0">
             <div
               className="flex flex-col"
-              style={{ height: "480px", overflow: "hidden" }}
+              style={{ height: "380px", overflow: "hidden" }}
             >
               <ScrollArea
                 className="flex-1 px-3 py-4"

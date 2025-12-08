@@ -117,98 +117,137 @@ export function FoodRecipe({ recipeId, onStartCookingAssistant, onBack }: FoodRe
     };
 
     return (
-        <div className="max-w-3xl mx-auto px-4 py-8 bg-white shadow-lg min-h-screen">
+        <div
+            className="relative max-w-3xl mx-auto px-4 pb-8 bg-white shadow-lg"
+            style={{
+                paddingTop: "96px",   // ✅ 상단바 높이 강제 밀기 (pt-24보다 확실함)
+                minHeight: "100dvh",  // ✅ 모바일 주소창 대응
+            }}
+            >
+
             
+            {/* ✅ 상단 타이틀 + AI 버튼 */}
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-extrabold text-gray-900">{recipe.name}</h1>
-                <Button 
-                    onClick={handleStartAssistant} 
-                    className="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-full shadow-lg transition-transform transform hover:scale-105"
+                <h1
+                className="text-3xl font-extrabold"
+                style={{
+                    background: "linear-gradient(135deg, #465940 0%, #5a6b4e 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                }}
                 >
-                    <Zap className="h-5 w-5 mr-2" />
-                    AI 요리보조 시작
+                {recipe.name}
+                </h1>
+
+                <Button
+                onClick={handleStartAssistant}
+                className="text-white font-bold py-2 px-4 rounded-full shadow-lg transition-transform hover:scale-105"
+                style={{
+                    background: "linear-gradient(135deg, #465940 0%, #5a6b4e 100%)",
+                    boxShadow: "0 6px 14px rgba(70, 89, 64, 0.35)",
+                }}
+                >
+                <Zap className="h-5 w-5 mr-2" />
+                AI 요리보조 시작
                 </Button>
             </div>
 
-            {/* 메인 이미지 */}
+            {/* ✅ 메인 이미지 */}
             {recipe.image_large && (
-                <div className="w-full h-80 bg-gray-100 rounded-xl overflow-hidden mb-6">
-                    <img 
-                        src={recipe.image_large} 
-                        alt={recipe.name} 
-                        className="w-full h-full object-cover"
-                    />
+                <div className="w-full h-80 bg-gray-100 rounded-2xl overflow-hidden mb-6 shadow-md">
+                <img
+                    src={recipe.image_large}
+                    alt={recipe.name}
+                    className="w-full h-full object-cover"
+                />
                 </div>
             )}
-            
+
             <div className="space-y-8">
-                {/* 레시피 개요 */}
+
+                {/* ✅ 레시피 개요 */}
                 <section className="p-4 border-b">
-                    <h2 className="text-xl font-bold mb-3 text-orange-600">개요</h2>
-                    <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
-                        <div><span className="font-semibold">카테고리:</span> {renderValue(recipe.category)}</div>
-                        <div><span className="font-semibold">조리 방법:</span> {renderValue(recipe.cooking_method)}</div>
-                        <div><span className="font-semibold">해시태그:</span> {renderValue(recipe.hashtags, '').split(',').map(tag => tag.trim()).filter(tag => tag).join(', ')}</div>
+                <h2 className="text-xl font-bold mb-3 text-[#465940]">개요</h2>
+                <div className="grid grid-cols-2 gap-4 text-sm text-gray-700">
+                    <div><span className="font-semibold text-[#465940]">카테고리:</span> {renderValue(recipe.category)}</div>
+                    <div><span className="font-semibold text-[#465940]">조리 방법:</span> {renderValue(recipe.cooking_method)}</div>
+                    <div className="col-span-2">
+                    <span className="font-semibold text-[#465940]">해시태그:</span>{" "}
+                    {renderValue(recipe.hashtags, "")
+                        .split(",")
+                        .map(tag => tag.trim())
+                        .filter(tag => tag)
+                        .join(", ")}
                     </div>
+                </div>
                 </section>
 
-                {/* 영양 정보 (빈 값일 경우 섹션 숨기지 않고 "정보 없음" 표시) */}
+                {/* ✅ 영양 정보 */}
                 <section className="p-4 border-b">
-                    <h2 className="text-xl font-bold mb-3 text-orange-600">영양 정보 (1인분)</h2>
-                    <div className="grid grid-cols-3 gap-4 text-sm text-gray-700">
-                        <div><span className="font-semibold">중량:</span> {renderValue(recipe.info_weight)}</div>
-                        <div><span className="font-semibold">열량:</span> {renderValue(recipe.calories, 'kcal')}</div>
-                        <div><span className="font-semibold">탄수화물:</span> {renderValue(recipe.carbs, 'g')}</div>
-                        <div><span className="font-semibold">단백질:</span> {renderValue(recipe.protein, 'g')}</div>
-                        <div><span className="font-semibold">지방:</span> {renderValue(recipe.fat, 'g')}</div>
-                        <div><span className="font-semibold">나트륨:</span> {renderValue(recipe.sodium, 'mg')}</div>
-                    </div>
-                </section>
-                
-                {/* 재료 정보 */}
-                <section className="p-4 border-b">
-                    <h2 className="text-xl font-bold mb-3 text-orange-600">재료</h2>
-                    <p className="whitespace-pre-wrap text-gray-700">{renderValue(recipe.ingredients_details, '재료 정보가 없습니다.')}</p>
+                <h2 className="text-xl font-bold mb-3 text-[#465940]">영양 정보 (1인분)</h2>
+                <div className="grid grid-cols-3 gap-4 text-sm text-gray-700">
+                    <div><span className="font-semibold text-[#465940]">중량:</span> {renderValue(recipe.info_weight)}</div>
+                    <div><span className="font-semibold text-[#465940]">열량:</span> {renderValue(recipe.calories, "kcal")}</div>
+                    <div><span className="font-semibold text-[#465940]">탄수화물:</span> {renderValue(recipe.carbs, "g")}</div>
+                    <div><span className="font-semibold text-[#465940]">단백질:</span> {renderValue(recipe.protein, "g")}</div>
+                    <div><span className="font-semibold text-[#465940]">지방:</span> {renderValue(recipe.fat, "g")}</div>
+                    <div><span className="font-semibold text-[#465940]">나트륨:</span> {renderValue(recipe.sodium, "mg")}</div>
+                </div>
                 </section>
 
-                {/* 조리 순서 */}
+                {/* ✅ 재료 정보 */}
+                <section className="p-4 border-b">
+                <h2 className="text-xl font-bold mb-3 text-[#465940]">재료</h2>
+                <p className="whitespace-pre-wrap text-gray-700">
+                    {renderValue(recipe.ingredients_details, "재료 정보가 없습니다.")}
+                </p>
+                </section>
+
+                {/* ✅ 조리 순서 */}
                 <section className="p-4">
-                    <h2 className="text-xl font-bold mb-4 text-orange-600">조리 순서</h2>
-                    <ol className="space-y-6">
-                        {recipe.steps.length > 0 ? (
-                            recipe.steps.map((step) => (
-                                <li key={step.step} className="p-4 border-l-4 border-orange-500 bg-orange-50 rounded-r-lg shadow-sm">
-                                    <h3 className="text-lg font-semibold text-gray-800 mb-2">Step {step.step}</h3>
-                                    <p className="text-gray-700 whitespace-pre-wrap">{step.text}</p>
-                                    {/* DB에 이미지 경로는 없으므로 해당 필드는 사용하지 않습니다. */}
-                                </li>
-                            ))
-                        ) : (
-                            <p className="text-gray-500">조리 순서 정보가 없습니다.</p>
-                        )}
-                    </ol>
+                <h2 className="text-xl font-bold mb-4 text-[#465940]">조리 순서</h2>
+                <ol className="space-y-6">
+                    {recipe.steps.length > 0 ? (
+                    recipe.steps.map((step) => (
+                        <li
+                        key={step.step}
+                        className="p-4 rounded-xl shadow-sm border-l-4"
+                        style={{
+                            borderColor: "#465940",
+                            background: "linear-gradient(135deg, #f5f3e8 0%, #ffffff 100%)",
+                        }}
+                        >
+                        <h3 className="text-lg font-semibold text-[#465940] mb-2">
+                            Step {step.step}
+                        </h3>
+                        <p className="text-gray-700 whitespace-pre-wrap">{step.text}</p>
+                        </li>
+                    ))
+                    ) : (
+                    <p className="text-gray-500">조리 순서 정보가 없습니다.</p>
+                    )}
+                </ol>
                 </section>
-                
-                {/* 저감 조리법 TIP */}
-                {recipe.sodium_tip && (
-                    <section className="p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded-r-lg">
-                        <h2 className="text-xl font-bold mb-3 text-yellow-800">🧂 저감 조리법 TIP</h2>
-                        <p className="text-gray-700 whitespace-pre-wrap">{recipe.sodium_tip}</p>
-                    </section>
-                )}
 
+                
             </div>
-            
-            {/* 하단 AI 요리보조 버튼 (스크롤 시에도 접근 용이하도록 하단 고정 고려 가능) */}
-             <div className="mt-10 text-center">
-                <Button 
-                    onClick={handleStartAssistant} 
-                    className="w-full max-w-sm bg-red-500 hover:bg-red-600 text-white font-bold py-3 text-lg rounded-full shadow-xl transition-all"
+
+            {/* ✅ 하단 AI 버튼 */}
+            <div className="mt-10 text-center">
+                <Button
+                onClick={handleStartAssistant}
+                className="w-full max-w-sm text-white font-bold py-3 text-lg rounded-full shadow-xl transition-all"
+                style={{
+                    background: "linear-gradient(135deg, #465940 0%, #5a6b4e 100%)",
+                    boxShadow: "0 10px 24px rgba(70, 89, 64, 0.4)",
+                }}
                 >
-                    <Zap className="h-6 w-6 mr-3" />
-                    AI 요리보조 시작하기
+                <Zap className="h-6 w-6 mr-3" />
+                AI 요리보조 시작하기
                 </Button>
             </div>
-        </div>
+
+            </div>
+
     );
 }

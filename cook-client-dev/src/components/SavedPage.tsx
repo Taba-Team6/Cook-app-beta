@@ -30,7 +30,7 @@ export function SavedPage({ savedRecipes = [], onRecipeClick, onRemoveSaved }: S
               <Card
                 key={recipe.id}
                 className="overflow-hidden hover:shadow-lg transition-all cursor-pointer"
-                onClick={() => onRecipeClick?.(recipe.id)}
+                onClick={() => onRecipeClick?.(recipe.recipe_id || recipe.id)}
               >
                 <div className="w-full h-40 relative bg-muted overflow-hidden">
                   <ImageWithFallback
