@@ -83,6 +83,13 @@ export function VoiceAssistant({
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  // 🔥 단계 관련 최신 상태를 들고 있을 ref들
+  const ingredientsCheckedRef = useRef(ingredientsChecked);
+  const cookingStartedRef = useRef(cookingStarted);
+  const currentStepIndexRef = useRef(currentStepIndex);
+  const recipeInfoRef = useRef<Recipe | null>(recipeInfo);
+  const completedStepsRef = useRef<number[]>(completedSteps);
+
   // Wakeword / Command recognizer
   const [isWakeActive, setIsWakeActive] = useState(false);
   const isWakeActiveRef = useRef(false);
@@ -103,124 +110,176 @@ export function VoiceAssistant({
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ===============================
-  // 초기 레시피 세팅
-  //  - initialRecipe(이미 Recipe 형태)가 있으면 그대로 사용
-  //  - 없으면 FullRecipe(initialRecipeContext)를 Recipe로 변환해서 사용
-  // ===============================
+    // ref ↔ state 동기화
   useEffect(() => {
-    let base: Recipe | null = initialRecipe ?? null;
+    ingredientsCheckedRef.current = ingredientsChecked;
+  }, [ingredientsChecked]);
 
-    // FullRecipe → Recipe 변환
-    if (!base && initialRecipeContext) {
-      const full = initialRecipeContext as any;
+  useEffect(() => {
+    cookingStartedRef.current = cookingStarted;
+  }, [cookingStarted]);
 
-      // 재료 문자열(fullIngredients)
-      const fullIngredients =
-        full.ingredients?.map((ing: any) =>
-          `• ${(ing.name ?? ing.ingredient ?? ing.title ?? "").trim()}${
-            ing.amount ?? ing.quantity ?? ing.volume
-              ? " " + (ing.amount ?? ing.quantity ?? ing.volume)
-              : ""
-          }`
-        ) ?? [];
+  useEffect(() => {
+    currentStepIndexRef.current = currentStepIndex;
+  }, [currentStepIndex]);
 
-      // 단계 문자열 배열
-      const steps =
-        full.steps
-          ?.map((s: any) => {
-            if (!s) return "";
-            if (typeof s === "string") return s;
+  useEffect(() => {
+    recipeInfoRef.current = recipeInfo;
+  }, [recipeInfo]);
 
-            // 가장 흔한 필드들 먼저 시도
-            const candKeys = [
-              "description",
-              "step",
-              "content",
-              "text",
-              "instruction",
-              "instruction_text",
-            ];
-            for (const k of candKeys) {
-              if (typeof s[k] === "string" && s[k].trim()) return s[k];
-            }
+  useEffect(() => {
+    completedStepsRef.current = completedSteps;
+  }, [completedSteps]);
 
-            // 그래도 없으면, 객체 안의 문자열 값들을 전부 이어붙이기
-            const vals = Object.values(s).filter(
-              (v) => typeof v === "string" && v.trim()
-            ) as string[];
 
-            return vals.join(" ");
+  // ------------------------------------
+  // 🔥 조리창에서 나갈 때(언마운트) 마이크 완전 정리
+  // ------------------------------------
+  useEffect(() => {
+    return () => {
+      console.log("[voice] cleanup on unmount: stop all recognition");
+
+      // 무음 타이머 정리
+      clearSilenceTimer();
+
+      // 웨이크워드 + 명령 인식 전부 중지
+      stopAllListening();
+
+      // 혹시 남아있을 수도 있는 ref들 정리 (안 해도 큰 문제는 없지만 안전하게)
+      try { wakeRecognizerRef.current?.stop?.(); } catch {}
+      try { commandRecognizerRef.current?.stop?.(); } catch {}
+      wakeRecognizerRef.current = null;
+      commandRecognizerRef.current = null;
+      isWakeActiveRef.current = false;
+      hardErrorRef.current = false;
+    };
+  }, []);
+
+
+  // ===============================
+// 초기 레시피 세팅
+//  - initialRecipe(이미 Recipe 형태)가 있으면 그대로 사용
+//  - 없으면 FullRecipe(initialRecipeContext)를 Recipe로 변환해서 사용
+// ===============================
+useEffect(() => {
+  let base: Recipe | null = initialRecipe ?? null;
+
+  // FullRecipe → Recipe 변환
+  if (!base && initialRecipeContext) {
+    const full = initialRecipeContext as any;
+
+    // 재료 문자열(fullIngredients)
+    const fullIngredients =
+      full.ingredients?.map((ing: any) =>
+        `• ${(ing.name ?? ing.ingredient ?? ing.title ?? "").trim()}${
+          ing.amount ?? ing.quantity ?? ing.volume
+            ? " " + (ing.amount ?? ing.quantity ?? ing.volume)
+            : ""
+        }`
+      ) ?? [];
+
+    // 단계 문자열 배열
+    const steps =
+      full.steps
+        ?.map((s: any) => {
+          if (!s) return "";
+          if (typeof s === "string") return s;
+
+          const candKeys = [
+            "description",
+            "step",
+            "content",
+            "text",
+            "instruction",
+            "instruction_text",
+          ];
+          for (const k of candKeys) {
+            if (typeof s[k] === "string" && s[k].trim()) return s[k];
+          }
+
+          const vals = Object.values(s).filter(
+            (v) => typeof v === "string" && v.trim()
+          ) as string[];
+
+          return vals.join(" ");
+        })
+        .filter((line: string) => line && line.length > 0) ?? [];
+
+    base = {
+      id: full.id ?? crypto.randomUUID(),
+      name: full.name,
+      recipeName: full.name,
+      image: full.image ?? null,
+      fullIngredients,
+      ingredients:
+        full.ingredients?.map((ing: any) => ({
+          name: (ing.name ?? ing.ingredient ?? ing.title ?? "").trim(),
+          amount:
+            (ing.amount ?? ing.quantity ?? ing.volume ?? "")
+              .toString()
+              .trim(),
+        })) ?? [],
+      steps,
+      category: full.category ?? "기타",
+      cookingTime: full.cooking_time ?? full.cookingTime ?? null,
+      servings: full.servings ?? null,
+      difficulty: full.difficulty ?? null,
+    };
+  }
+
+  if (!base) return;
+
+  // ===== 여기부터는 그대로 유지 =====
+  setMessages([]);
+  setRecipeInfo(base);
+  setIngredientsChecked(false);
+  setCookingStarted(false);
+  setCurrentStepIndex(0);
+  setCompletedSteps([]);
+  setIsFinished(false);
+  setIsSpeaking(false);
+  setIsListening(false);
+  setIsWakeActive(false);
+
+  const fullLines =
+    base.fullIngredients
+      ?.map((line: any) =>
+        typeof line === "string" ? line : String(line)
+      )
+      .filter((s: string) => s && s.trim().length > 0) ?? [];
+
+  const ingredientLines =
+    !fullLines.length && Array.isArray((base as any).ingredients)
+      ? (base as any).ingredients
+          .map((i: any) => {
+            if (typeof i === "string") return i;
+            const name = i.name ?? i.ingredient ?? i.title ?? "";
+            const amount = i.amount ?? i.quantity ?? i.qty ?? "";
+            if (!name && !amount) return "";
+            return amount ? `${name} ${amount}` : name;
           })
-          .filter((line: string) => line && line.length > 0) ?? [];
+          .filter((s: string) => s && s.trim().length > 0)
+      : [];
 
-      base = {
-        id: full.id ?? crypto.randomUUID(),   // ✅ id 강제 생성
-        name: full.name,  
-        recipeName: full.name,
-        image: full.image ?? null,
-        fullIngredients,
-        ingredients:
-          full.ingredients?.map((ing: any) => ({
-            name: (ing.name ?? ing.ingredient ?? ing.title ?? "").trim(),
-            amount:
-              (ing.amount ?? ing.quantity ?? ing.volume ?? "")
-                .toString()
-                .trim(),
-          })) ?? [],
-        steps,
-      };
-    }
+  const lines = fullLines.length > 0 ? fullLines : ingredientLines;
+  const title = base.recipeName ?? (base as any).name ?? "이 레시피";
 
-    if (!base) return;
+  if (lines.length > 0) {
+    addMessage(
+      `${title} 재료 목록입니다:\n${lines.join(
+        "\n"
+      )}\n\n빠진 재료가 있으면 말해주세요!`,
+      "assistant"
+    );
+  } else {
+    addMessage(
+      `${title} 레시피의 재료 정보를 불러오지 못했어요.\n필요한 재료를 말로 알려주시면 도와드릴게요!`,
+      "assistant"
+    );
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [initialRecipe, initialRecipeContext]);
 
-    // 상태 초기화
-    setRecipeInfo(base);
-    setIngredientsChecked(false);
-    setCookingStarted(false);
-    setCurrentStepIndex(0);
-    setCompletedSteps([]);
-    setIsFinished(false);
-
-    // 재료 메시지 출력
-    const fullLines =
-      base.fullIngredients
-        ?.map((line: any) =>
-          typeof line === "string" ? line : String(line)
-        )
-        .filter((s: string) => s && s.trim().length > 0) ?? [];
-
-    const ingredientLines =
-      !fullLines.length && Array.isArray((base as any).ingredients)
-        ? (base as any).ingredients
-            .map((i: any) => {
-              if (typeof i === "string") return i;
-              const name = i.name ?? i.ingredient ?? i.title ?? "";
-              const amount = i.amount ?? i.quantity ?? i.qty ?? "";
-              if (!name && !amount) return "";
-              return amount ? `${name} ${amount}` : name;
-            })
-            .filter((s: string) => s && s.trim().length > 0)
-        : [];
-
-    const lines = fullLines.length > 0 ? fullLines : ingredientLines;
-    const title = base.recipeName ?? (base as any).name ?? "이 레시피";
-
-    if (lines.length > 0) {
-      addMessage(
-        `${title} 재료 목록입니다:\n${lines.join(
-          "\n"
-        )}\n\n빠진 재료가 있으면 말해주세요!`,
-        "assistant"
-      );
-    } else {
-      addMessage(
-        `${title} 레시피의 재료 정보를 불러오지 못했어요.\n필요한 재료를 말로 알려주시면 도와드릴게요!`,
-        "assistant"
-      );
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialRecipe, initialRecipeContext]);
 
   const totalSteps = recipeInfo?.steps?.length ?? 0;
   const completedCount = completedSteps.length;
@@ -266,6 +325,12 @@ export function VoiceAssistant({
     ];
     return keywords.some((kw) => text.includes(kw));
   };
+  // ✅ '다음', '계속' 같은 말도 한 번에 인식
+  const isNextIntent = (text: string) => {
+    const compact = text.replace(/\s/g, "");
+    const keywords = ["다음", "다음단계", "다음으로", "계속", "계속해"];
+    return keywords.some((kw) => compact.includes(kw));
+  };
 
   // 단계 메시지
   const buildStepMessage = (i: number, steps: string[] = []) => {
@@ -285,15 +350,38 @@ export function VoiceAssistant({
     const text = normalizeText(rawText);
     if (!text) return;
 
+    // 🔥 항상 ref에 들어있는 "최신 상태"를 기준으로 처리
+    const ingredientsChecked = ingredientsCheckedRef.current;
+    const cookingStarted = cookingStartedRef.current;
+    const currentStepIndex = currentStepIndexRef.current;
+    const recipeInfoLocal = recipeInfoRef.current;
+    const completedSteps = completedStepsRef.current;
+
+    console.log(
+      "%c[VOICE DEBUG] ===== 사용자 입력 처리 시작 =====",
+      "color: #4CAF50; font-weight: bold"
+    );
+    console.log("[VOICE DEBUG] 입력(raw):", rawText);
+    console.log("[VOICE DEBUG] 입력(normalized):", text);
+    console.log("[VOICE DEBUG] ingredientsChecked:", ingredientsChecked);
+    console.log("[VOICE DEBUG] cookingStarted:", cookingStarted);
+    console.log("[VOICE DEBUG] currentStepIndex:", currentStepIndex);
+    console.log("[VOICE DEBUG] recipeInfo:", recipeInfoLocal);
+    console.log("[VOICE DEBUG] ======================================");
+
     addMessage(text, "user");
 
     // ===== 1) 처음 레시피 생성 =====
-    if (!recipeInfo) {
+    if (!recipeInfoLocal) {
       try {
         const json = await askGPT_raw({ message: text, profile: userProfile });
         const info = JSON.parse(json);
 
         if (!info.steps || !info.fullIngredients) throw new Error();
+
+        if (!info.category) {
+          info.category = "AI 레시피";
+        }
 
         setRecipeInfo(info);
         addMessage(
@@ -309,8 +397,41 @@ export function VoiceAssistant({
     }
 
     const nowRecipe =
-      typeof recipeInfo === "string" ? JSON.parse(recipeInfo) : recipeInfo;
+      typeof recipeInfoLocal === "string"
+        ? JSON.parse(recipeInfoLocal)
+        : recipeInfoLocal;
 
+    // ✅ 우선순위 0: 이미 요리 중일 때의 '다음/계속'은 무조건 "다음 단계"로 처리
+    const compact = text.replace(/\s/g, "");
+    const isPureNext = ["다음", "다음단계", "다음으로", "계속", "계속해"].some(
+      (kw) => compact.includes(kw)
+    );
+
+    if (cookingStarted && isPureNext) {
+      const total = nowRecipe.steps?.length ?? 0;
+      const current = currentStepIndex;
+
+      if (!completedSteps.includes(current)) {
+        setCompletedSteps((prev) => [...prev, current]);
+      }
+
+      const next = current + 1;
+
+      if (next < total) {
+        setCurrentStepIndex(next);
+        addMessage(
+          buildStepMessage(next, nowRecipe.steps || []),
+          "assistant"
+        );
+      } else {
+        setIsFinished(true);
+        addMessage(
+          '모든 단계가 끝났습니다! ‘요리 완료’를 눌러주세요.',
+          'assistant'
+        );
+      }
+      return;
+    }
     // ===== 2) 재료 체크 단계 =====
     if (!ingredientsChecked) {
       const readyKeywords = ["다 있어", "다있어", "재료 다 있어", "재료다있어"];
@@ -320,7 +441,7 @@ export function VoiceAssistant({
         return;
       }
 
-      if (isStartIntent(text)) {
+      if (isStartIntent(text) || isNextIntent(text)) {
         setIngredientsChecked(true);
         setCookingStarted(true);
         setCurrentStepIndex(0);
@@ -344,7 +465,7 @@ export function VoiceAssistant({
 
     // ===== 3) 요리 시작 전 =====
     if (!cookingStarted) {
-      if (isStartIntent(text)) {
+      if (isStartIntent(text) || isNextIntent(text)) {
         setCookingStarted(true);
         setCurrentStepIndex(0);
         addMessage(buildStepMessage(0, nowRecipe.steps || []), "assistant");
@@ -419,19 +540,14 @@ export function VoiceAssistant({
   };
 
   const stopCommandListening = () => {
-    clearSilenceTimer();
-    try {
-      commandRecognizerRef.current?.stop();
-    } catch {}
-    commandRecognizerRef.current = null;
-    setIsListening(false);
+  clearSilenceTimer();
+  try { commandRecognizerRef.current?.stop(); } catch {}
+  commandRecognizerRef.current = null; // ← 추가!!!
   };
 
   const stopWakeListening = () => {
-    try {
-      wakeRecognizerRef.current?.stop();
-    } catch {}
-    wakeRecognizerRef.current = null;
+  try { wakeRecognizerRef.current?.stop(); } catch {}
+  wakeRecognizerRef.current = null; // ← 추가!!!
   };
 
   const stopAllListening = () => {
@@ -479,32 +595,42 @@ export function VoiceAssistant({
     };
 
     recognizer.onresult = (e: any) => {
-      const result = e.results[e.results.length - 1];
-      const text: string = result[0].transcript || "";
-      const normalized = text.replace(/\s+/g, "");
+  const result = e.results[e.results.length - 1];
+  const text: string = result[0].transcript || "";
+  const normalized = text.replace(/\s+/g, "");
 
-      console.log("[wake] result:", text, "=>", normalized);
+  console.log("[wake] result:", text, "=>", normalized);
+  // 여러 개 웨이크워드 허용
+  const wakeWords = ["안녕", "시작", "요리야", "요리도우미", "헤이요리"];
 
-      if (normalized.includes("안녕")) {
-        console.log("[wake] '안녕' 감지 → command 모드로 전환");
-        try {
-          recognizer.onresult = null;
-          recognizer.onend = null;
-          recognizer.onerror = null;
-          recognizer.onstart = null;
-          recognizer.stop();
-        } catch (e) {
-          console.error("[wake] stop() error:", e);
-        }
-        setTimeout(() => {
-          startCommandListening();
-        }, 500);
-      }
-    };
+  if (wakeWords.some((word) => normalized.includes(word))) {
+    console.log("[wake] 웨이크워드 감지 → command 모드로 전환");
+
+    try {
+      recognizer.onresult = null;
+      recognizer.onend = null;
+      recognizer.onerror = null;
+      recognizer.onstart = null;
+      recognizer.stop();
+    } catch (e) {
+      console.error("[wake] stop() error:", e);
+    }
+
+    // wake 완전히 종료된 뒤 커맨드 모드 시작
+    setTimeout(() => {
+      startCommandListening();
+    }, 500);
+  }
+};
+
 
     recognizer.onerror = (e: any) => {
       console.error("[wake] onerror:", e);
-
+      // ✅ stop() 호출로 인한 정상 종료 → 신경 안 씀
+    if (e.error === "aborted") {
+    console.log("[wake] aborted (stop() 호출로 인한 정상 종료)");
+    return;
+    }
       if (
         e.error === "not-allowed" ||
         e.error === "audio-capture" ||
@@ -726,8 +852,6 @@ export function VoiceAssistant({
       };
 
       console.log("✅ 최종 전송 payload:", payload);
-
-      await addCompletedRecipe(payload);
 
       console.log("✅ DB 저장 성공");
 

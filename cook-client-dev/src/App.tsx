@@ -22,6 +22,8 @@ import { FoodRecipe, FullRecipe } from "./components/FoodRecipe";
 // ⭐ OnboardingGuide (두 번째 코드에서 가져온 부분)
 import { OnboardingGuide } from "./components/OnboardingGuide";
 
+import { getSavedRecipeById } from "./utils/api";
+
 import {
   getCurrentUser,
   removeAuthToken,
@@ -31,6 +33,7 @@ import {
   getSavedRecipes,
   getCompletedRecipes,
   addCompletedRecipe,
+  getCompletedRecipeById 
 } from "./utils/api";
 import type { CompletedRecipePayload, CompletedRecipe, } from "./utils/api";
 
@@ -62,8 +65,13 @@ interface RecipeDetailData {
   image: string | null;
   description: string | null;
   category: string;
-  cooking_method: string | null;
-  hashtags: string | null;
+
+  cooking_method: string | null | undefined;
+  hashtags: string | null | undefined;
+
+  cookingTime?: string | null;
+  difficulty?: string | null;
+
   ingredients: { name: string; amount: string }[];
   steps: string[];
 }
@@ -74,6 +82,8 @@ const buildImageFromTitle = (title: string) => {
   const query = encodeURIComponent(`${title}, 음식, 요리, food, dish`);
   return `https://source.unsplash.com/featured/?${query}`;
 };
+
+
 
 
 // ✅ 같은 메뉴 이름(name) 기준으로 최신 기록만 남기기
@@ -215,6 +225,21 @@ localStorage.setItem(
     }
   }, [isAuthenticated, currentStep, currentUser]);
 
+  // ✅ 완료한 요리 목록 서버에서 최초 1회 로딩
+useEffect(() => {
+  if (!isAuthenticated) return;
+
+  getCompletedRecipes()
+    .then((list) => {
+      console.log("✅ completedRecipes 로드됨:", list);
+      setCompletedRecipes(list);
+    })
+    .catch((e) => {
+      console.error("❌ 완료한 요리 불러오기 실패:", e);
+    });
+}, [isAuthenticated]);
+
+
   const handleOnboardingFinish = () => {
     setShowOnboarding(false);
     if (currentUser) {
@@ -309,6 +334,33 @@ localStorage.setItem(
     }
   };
 
+
+  const refreshSavedRecipes = async () => {
+    try {
+      const list = await getSavedRecipes();
+
+      const normalized = list.map((item: any) => ({
+        id: item.recipe_id,
+        name: item.name,
+        category: item.category ?? null,
+        image: item.image ?? null,
+      }));
+
+      setSavedRecipes(normalized);
+
+      localStorage.setItem(
+        "cooking_assistant_saved_recipes",
+        JSON.stringify(normalized)
+      );
+
+      // ✅ 기존 이벤트 방식 유지 중이니까 이것도 같이 날려줌
+      window.dispatchEvent(new Event("savedRecipesUpdated"));
+
+    } catch (e) {
+      console.error("Failed to refresh saved recipes:", e);
+    }
+  };
+
   // ------------------------------
   //   로그인 / 로그아웃
   // ------------------------------
@@ -336,6 +388,18 @@ localStorage.setItem(
   );
 } catch (err) {
   console.error("Failed to load saved recipes:", err);
+}
+try {
+  const completed = await getCompletedRecipes();
+  const deduped = dedupeCompletedRecipes(completed);
+
+  setCompletedRecipes(deduped);
+  localStorage.setItem(
+    "cooking_assistant_completed_recipes",
+    JSON.stringify(deduped)
+  );
+} catch (e) {
+  console.error("Failed to load completed recipes:", e);
 }
   };
 
@@ -369,15 +433,124 @@ localStorage.setItem(
     handleBackNavigation();
   };
 
+
+
+  const handleSavedRecipeClick = async (recipeId: string) => {
+  try {
+    // ✅ AI 레시피는 completed_recipes 기준으로만 연다
+    if (recipeId.startsWith("ai-")) {
+      const completedRes = await getCompletedRecipeById(recipeId); 
+      const completed = completedRes?.recipe;   // ✅✅✅ 이게 핵심
+
+      if (!completed) {
+        alert("완료된 AI 레시피를 찾을 수 없습니다.");
+        return;
+      }
+
+      const aiRecipe: AiRecipe = {
+        id: completed.id,
+        name: completed.name,
+        description: completed.description ?? undefined,
+        image: completed.image ?? undefined,
+        category: completed.category,
+        cookingTime: completed.cookingTime ?? null,
+        servings: completed.servings ?? null,
+        difficulty: completed.difficulty ?? null,
+
+        ingredients: completed.ingredients.map((i: any) => ({
+          name: i.name,
+          amount: i.amount,
+        })),
+
+        steps: completed.steps,
+
+        fullIngredients: completed.ingredients.map((i: any) => {
+          const amount = i.amount ? ` ${i.amount}` : "";
+          return `• ${i.name}${amount}`;
+        }),
+      };
+
+      setInitialAiRecipe(aiRecipe);
+      navigateToStep("voice-assistant");
+      return;
+    }
+
+    // ✅ 일반 DB 레시피는 기존 로직 유지
+    setInitialAiRecipe(null);
+    handleRecipeClick(recipeId);
+
+  } catch (e) {
+    console.error("❌ 저장 레시피 클릭 실패:", e);
+    alert("레시피를 불러오지 못했습니다.");
+  }
+};
+
+
+
+
+
   // ------------------------------
   //   레시피 상세/전체 페이지
   // ------------------------------
-  const handleRecipeClick = (recipeId: string) => {
-    setSelectedRecipeId(recipeId);
-    setSelectedRecipe(null);
-    setSelectedFullRecipe(null);
-    navigateToStep("full-recipe");
-  };
+  const handleRecipeClick = async (recipeId: string) => {
+  // ✅ AI 레시피면 completed_recipes에서 직접 불러오기
+  if (recipeId.startsWith("ai-")) {
+    try {
+      const completedRes = await getCompletedRecipeById(recipeId); // ✅ 1단계
+      const completed = completedRes?.recipe;                     // ✅✅ 핵심
+
+      if (!completed) {
+        alert("완료된 AI 레시피를 찾을 수 없습니다.");
+        return;
+      }
+
+      const aiRecipe: AiRecipe = {
+        id: completed.id,
+        name: completed.name,
+        description: completed.description ?? undefined,
+        image: completed.image ?? undefined,
+        category: completed.category,
+        cookingTime: completed.cookingTime ?? null,
+        servings: completed.servings ?? null,
+        difficulty: completed.difficulty ?? null,
+
+        ingredients: completed.ingredients.map((i: any) => ({
+          name: i.name,
+          amount: i.amount,
+        })),
+
+        steps: completed.steps,
+
+        fullIngredients: completed.ingredients.map((i: any) => {
+          const amount = i.amount ? ` ${i.amount}` : "";
+          return `• ${i.name}${amount}`;
+        }),
+      };
+
+      setInitialAiRecipe(aiRecipe);
+      navigateToStep("voice-assistant");
+      return;
+    } catch (e) {
+      console.error("❌ AI 레시피 불러오기 실패:", e);
+      alert("레시피를 불러오지 못했습니다.");
+      return;
+    }
+  }
+
+  // ✅ 일반 DB 레시피
+  setSelectedRecipeId(recipeId);
+  setSelectedRecipe(null);
+  setSelectedFullRecipe(null);
+  navigateToStep("full-recipe");
+};
+
+const openVoiceAssistantFresh = () => {
+  setSelectedFullRecipe(null);
+  setInitialAiRecipe(null);
+  navigateToStep("voice-assistant");
+};
+
+
 
   const handleStartCookingAssistant = (recipe: FullRecipe) => {
     setSelectedFullRecipe(recipe);
@@ -411,7 +584,7 @@ localStorage.setItem(
   // ------------------------------
   //   레시피 완료/리뷰
   // ------------------------------
-  const handleCookingComplete = () => {
+  /*const handleCookingComplete = () => {
     if (selectedRecipe) {
       const already = completedRecipes.some(
         (r) =>
@@ -435,7 +608,7 @@ localStorage.setItem(
       }
     }
     navigateToStep("feedback");
-  };
+  };*/
 
   const handleReviewSubmit = () => {
     setSelectedRecipe(null);
@@ -531,7 +704,9 @@ const handleCookingCompleteFromAI = async (recipe: AiRecipe) => {
   const titleForImage =
     recipe.name ?? recipe.recipeName ?? "이름 없는 레시피";
   const imageUrl =
-    recipe.image ?? buildImageFromTitle(titleForImage);
+  recipe.image && recipe.image.trim() !== ""
+      ? recipe.image
+      : buildImageFromTitle(titleForImage);
 
   // 🔥 여기서 ingredients를 "제대로" 뽑아서 DB에 넣어줄 거야
   let ingredients: { name: string; amount: string }[] = [];
@@ -628,6 +803,8 @@ const handleCookingCompleteFromAI = async (recipe: AiRecipe) => {
 
   try {
     await addCompletedRecipe(payload);
+    
+
 
     const newCompleted: CompletedRecipe = {
       id: recipeId,
@@ -646,9 +823,11 @@ const handleCookingCompleteFromAI = async (recipe: AiRecipe) => {
     };
 
     // 1) 완료한 요리 목록 업데이트 (중복 제거 + 가장 오래된 기록만 유지)
-    setCompletedRecipes((prev) =>
-      dedupeCompletedRecipes([newCompleted, ...prev])
-    );
+    setCompletedRecipes(prev => {
+      const next = dedupeCompletedRecipes([newCompleted, ...prev]);
+      localStorage.setItem("cooking_assistant_completed_recipes", JSON.stringify(next));
+      return next;
+    });
 
     // 2) 리뷰 화면에 보여줄 selectedRecipe 세팅
     const reviewRecipe: RecipeDetailData = {
@@ -698,6 +877,7 @@ const handleCompletedRecipeClick = (recipe: CompletedRecipe) => {
     }),
   };
 
+  setSelectedFullRecipe(null);
   setInitialAiRecipe(aiRecipe);
   navigateToStep("voice-assistant");
 };
@@ -747,7 +927,7 @@ const handleCompletedRecipeClick = (recipe: CompletedRecipe) => {
           <>
             <HomePage
               onGetStarted={() => navigateToStep("profile")}
-              onVoiceAssistant={() => navigateToStep("voice-assistant")}
+              onVoiceAssistant={openVoiceAssistantFresh}
               onLogout={handleLogout}
               userName={currentUser?.name}
               onCommunityClick={() => navigateToStep("community")}
@@ -821,10 +1001,12 @@ const handleCompletedRecipeClick = (recipe: CompletedRecipe) => {
         {/* 저장한 레시피 */}
         {currentStep === "saved" && (
           <SavedPage
-            savedRecipes={savedRecipes}
-            onRecipeClick={(id) => handleRecipeClick(id)}
-            onRemoveSaved={handleToggleSaveRecipe}
-          />
+  savedRecipes={savedRecipes}
+  onRecipeClick={handleSavedRecipeClick}  
+  onRemoveSaved={handleToggleSaveRecipe}
+/>
+
+
         )}
 
         {/* 마이페이지 */}
@@ -862,7 +1044,13 @@ const handleCompletedRecipeClick = (recipe: CompletedRecipe) => {
           )}
 
         {/* 커뮤니티 */}
-        {currentStep === "community" && <CommunityPage />}
+        {currentStep === "community" && (
+          <CommunityPage
+            onGoToSaved={() => navigateToStep("saved")}
+            onRefreshSaved={refreshSavedRecipes}
+          />
+        )}
+
 
         {/* 완료한 레시피 목록 */}
         {currentStep === "completed-recipes" && (
@@ -884,7 +1072,8 @@ const handleCompletedRecipeClick = (recipe: CompletedRecipe) => {
             setCurrentStep("home");
           }}
           onRecipeClick={() => navigateToStep("recipe-list")}
-          onAIClick={() => navigateToStep("voice-assistant")}
+          onAIClick={openVoiceAssistantFresh}
+
           onIngredientsClick={() =>
             navigateToStep("ingredients-management")
           }

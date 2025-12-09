@@ -4,8 +4,6 @@ import { Card, CardContent } from "./ui/card";
 import { Textarea } from "./ui/textarea";
 import { Star, Upload, Home, Send, PartyPopper } from "lucide-react";
 import { motion } from "motion/react";
-//import type { RecipeDetailData } from "../App"; 
- 
 
 interface Recipe {
   id: string;
@@ -18,7 +16,7 @@ interface Recipe {
 }
 
 interface RecipeReviewProps {
-  recipe: Recipe;  
+  recipe: Recipe;
   onSubmit: () => void;
   onSkip: () => void;
 }
@@ -28,52 +26,60 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
   const [hoveredRating, setHoveredRating] = useState(0);
   const [review, setReview] = useState("");
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setUploadedImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setUploadedImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleSubmit = () => {
-    // 리뷰 데이터 준비
-    const currentUser = localStorage.getItem("cooking_assistant_current_user");
-    const user = currentUser ? JSON.parse(currentUser) : { name: "익명 사용자", id: "anonymous" };
-    
-    const newReview = {
-      id: `review_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      recipeId: recipe.id,
-      recipeName: recipe.name,
-      rating,
-      review,
-      image: uploadedImage,
-      userName: user.name,
-      userInitial: user.name.charAt(0).toUpperCase(),
-      createdAt: new Date().toISOString(),
-    };
+  // ✅ DB로 실제 저장
+  const handleSubmit = async () => {
+    if (rating === 0 || isSubmitting) return;
+    setIsSubmitting(true);
 
-    // 기존 리뷰 가져오기
-    const savedReviews = localStorage.getItem("cooking_assistant_reviews");
-    const reviews = savedReviews ? JSON.parse(savedReviews) : [];
-    
-    // 새 리뷰 추가
-    reviews.unshift(newReview); // 최신 리뷰를 맨 앞에 추가
-    
-    // localStorage에 저장
-    localStorage.setItem("cooking_assistant_reviews", JSON.stringify(reviews));
-    
-    console.log({
-      recipeId: recipe.id,
-      rating,
-      review,
-      image: uploadedImage
-    });
-    onSubmit();
+    try {
+      const currentUser = sessionStorage.getItem(
+        "cooking_assistant_current_user"
+      );
+      const user = currentUser ? JSON.parse(currentUser) : { name: "익명" };
+
+      const token = sessionStorage.getItem(
+        "cooking_assistant_auth_token"
+      );
+
+      const res = await fetch("http://localhost:3001/api/community", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          recipeId: recipe.id,
+          recipeName: recipe.name,
+          rating,
+          review: review.trim() === "" ? "맛있게 먹었습니다!" : review,
+          imageUrl: uploadedImage,
+          userName: user.name,
+          userInitial: user.name[0],
+        }),
+      });
+
+      if (!res.ok) throw new Error("커뮤니티 저장 실패");
+
+      onSubmit(); // ✅ 홈으로 이동
+    } catch (err) {
+      console.error("❌ 리뷰 저장 실패:", err);
+      alert("리뷰 저장에 실패했습니다.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const canSubmit = rating > 0;
@@ -81,7 +87,8 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-white pt-20 pb-24">
       <div className="max-w-2xl mx-auto px-4 py-8">
-        {/* 축하 메시지 */}
+
+        {/* 🎉 예전 축하 영역 */}
         <motion.div
           initial={{ scale: 0.8, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
@@ -91,11 +98,11 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
           <motion.div
             initial={{ y: -20 }}
             animate={{ y: 0 }}
-            transition={{ 
-              repeat: Infinity, 
-              repeatType: "reverse", 
+            transition={{
+              repeat: Infinity,
+              repeatType: "reverse",
               duration: 1,
-              ease: "easeInOut"
+              ease: "easeInOut",
             }}
           >
             <PartyPopper className="w-20 h-20 mx-auto mb-4 text-[#E07A5F]" />
@@ -106,17 +113,11 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
           </p>
         </motion.div>
 
-        {/* 리뷰 작성 카드 */}
+        {/* ✅ 예전 카드 스타일 유지 */}
         <Card className="mb-6">
           <CardContent className="p-6 space-y-6">
-            <div>
-              <h2 className="mb-2">요리는 어떠셨나요?</h2>
-              <p className="text-sm text-muted-foreground">
-                경험을 공유해주시면 다른 분들께 큰 도움이 됩니다
-              </p>
-            </div>
 
-            {/* 별점 */}
+            {/* ⭐ 별점 */}
             <div>
               <label className="block mb-3">별점을 남겨주세요 *</label>
               <div className="flex gap-2 justify-center">
@@ -126,32 +127,22 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
                     onClick={() => setRating(star)}
                     onMouseEnter={() => setHoveredRating(star)}
                     onMouseLeave={() => setHoveredRating(0)}
-                    className="transition-transform hover:scale-110 focus:outline-none"
+                    className="transition-transform hover:scale-110"
                   >
                     <Star
                       className={`w-12 h-12 ${
                         star <= (hoveredRating || rating)
                           ? "fill-[#F2CC8F] text-[#F2CC8F]"
                           : "text-gray-300"
-                      } transition-colors`}
+                      }`}
                     />
                   </button>
                 ))}
               </div>
-              {rating > 0 && (
-                <p className="text-center mt-2 text-sm text-muted-foreground">
-                  {rating === 1 && "아쉬워요"}
-                  {rating === 2 && "별로예요"}
-                  {rating === 3 && "괜찮아요"}
-                  {rating === 4 && "좋아요"}
-                  {rating === 5 && "최고예요!"}
-                </p>
-              )}
             </div>
 
-            {/* 리뷰 작성 */}
+            {/* ✍️ 후기 입력 */}
             <div>
-              <label className="block mb-2">후기를 남겨주세요 (선택)</label>
               <Textarea
                 value={review}
                 onChange={(e) => setReview(e.target.value)}
@@ -164,68 +155,63 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
               </p>
             </div>
 
-            {/* 사진 업로드 */}
+            {/* 📸 사진 업로드 */}
             <div>
-              <label className="block mb-2">완성 사진 (선택)</label>
-              <div className="space-y-3">
-                {uploadedImage ? (
-                  <div className="relative">
-                    <img
-                      src={uploadedImage}
-                      alt="Uploaded"
-                      className="w-full h-64 object-cover rounded-lg"
-                    />
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setUploadedImage(null)}
-                      className="absolute top-2 right-2"
-                    >
-                      삭제
-                    </Button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-[#A5B68D] transition-colors bg-gray-50 hover:bg-gray-100">
-                    <Upload className="w-10 h-10 mb-2 text-gray-400" />
-                    <p className="text-sm text-gray-500">클릭하여 사진 업로드</p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
-                )}
-              </div>
+              {uploadedImage ? (
+                <div className="relative">
+                  <img
+                    src={uploadedImage}
+                    className="w-full h-64 object-cover rounded-lg"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setUploadedImage(null)}
+                    className="absolute top-2 right-2"
+                  >
+                    삭제
+                  </Button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed rounded-lg cursor-pointer">
+                  <Upload className="w-10 h-10 mb-2 text-gray-400" />
+                  <p className="text-sm text-gray-500">클릭하여 사진 업로드</p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
+
           </CardContent>
         </Card>
 
-        {/* 액션 버튼 */}
+        {/* ✅ 예전 2버튼 구조 그대로 */}
         <div className="space-y-3">
           <Button
-            variant="outline"
             size="lg"
-            onClick={onSkip}
             className="w-full"
+            disabled={!canSubmit || isSubmitting}
+            onClick={handleSubmit}
           >
             <Send className="w-5 h-5 mr-2" />
             후기 등록하기
           </Button>
+
           <Button
             variant="outline"
             size="lg"
-            onClick={onSkip}
             className="w-full"
+            onClick={onSkip}
           >
             <Home className="w-5 h-5 mr-2" />
             다음에 작성하고 홈으로
           </Button>
         </div>
 
-        <p className="text-xs text-center text-muted-foreground mt-4">
-          * 별점은 필수입니다. 후기와 사진은 선택사항입니다.
-        </p>
       </div>
     </div>
   );

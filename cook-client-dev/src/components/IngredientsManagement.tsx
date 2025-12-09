@@ -13,6 +13,8 @@ import { format, differenceInDays, parseISO } from "date-fns";
 import { ko } from "date-fns/locale";
 import {getIngredients,addIngredient,updateIngredient,deleteIngredient,parseReceiptImage,} from "../utils/api";
 import { toast } from "sonner";
+import { X } from "lucide-react";
+
 
 export interface Ingredient {
   id: string;
@@ -243,10 +245,11 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
   // ✅ 영수증 업로드 관련 상태
 const [isReceiptUploading, setIsReceiptUploading] = useState(false);
 const [receiptIngredients, setReceiptIngredients] = useState<
-  { name: string; quantity: string; unit: string }[]
+  { name: string; quantity: string; unit: string; location: string }[]
 >([]);
 const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
 const fileInputRef = useRef<HTMLInputElement | null>(null);
+const [isReceiptReady, setIsReceiptReady] = useState(false);
 
 
   // Form state
@@ -429,13 +432,17 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
     if (!file) return;
 
     setIsReceiptUploading(true);
+    setIsReceiptReady(false); // ✅ 새로 분석 시작하니까 초기화
 
     try {
       const formData = new FormData();
       formData.append("image", file);
 
       const response = await parseReceiptImage(formData);
-      const parsed = response.ingredients || [];
+      const parsed = (response.ingredients || []).map((ing: any) => ({
+        ...ing,
+        location: "냉장실",   // ✅ 기본 보관 위치 자동 지정
+      }));
 
       if (!parsed.length) {
         toast.error("영수증에서 식재료를 찾지 못했어요");
@@ -443,8 +450,10 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
       }
 
       setReceiptIngredients(parsed);
-      setIsReceiptDialogOpen(true);
-      toast.success("영수증 인식 완료!");
+      // 🔵 자동으로 화면/다이얼로그 안 열고, 버튼만 "확인하기"로 바뀜
+      setIsReceiptReady(true);
+
+      toast.success("영수증 분석 완료! 확인하기를 눌러 주세요");
     } catch (error: any) {
       console.error("Receipt upload failed:", error);
       toast.error(error.message || "영수증 분석 실패");
@@ -453,6 +462,7 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
       event.target.value = "";
     }
   };
+
 
   // ✅ 영수증 인식 결과 → 한 번에 저장
   const handleSaveReceiptIngredients = async () => {
@@ -466,7 +476,7 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
           category: categorizeIngredient(ing.name),
           quantity: ing.quantity,
           unit: ing.unit,
-          storage: selectedLocation || "실온",
+          storage: ing.location,   // ✅ 항목마다 선택한 위치로 저장됨
           expiryDate: undefined,
           notes: "영수증 자동 등록",
         };
@@ -484,6 +494,7 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
       toast.success("영수증 식재료 저장 완료");
       setIsReceiptDialogOpen(false);
       setReceiptIngredients([]);
+      setIsReceiptReady(false); // ✅ 저장 후엔 다시 처음 상태로
     } catch (error) {
       toast.error("식재료 저장 실패");
     } finally {
@@ -539,7 +550,7 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
   // =========================
   // 첫 화면: 보관 위치 선택
   // =========================
-  if (!selectedLocation) {
+  if (!selectedLocation && !isReceiptDialogOpen) {
     return (
       <div className="min-h-screen bg-background pt-20 pb-24">
         <div className="max-w-6xl mx-auto px-4 py-6">
@@ -567,10 +578,23 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
             <Button
               variant="outline"
               disabled={isReceiptUploading}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (isReceiptReady) {
+                  // ✅ 분석이 끝난 상태 → "확인하기" 눌렀을 때 다이얼로그 열기
+                  setIsReceiptDialogOpen(true);
+                } else {
+                  // ✅ 아직 분석 전 → 파일 선택창 열기
+                  fileInputRef.current?.click();
+                }
+              }}
             >
-              {isReceiptUploading ? "분석 중..." : "영수증으로 자동 추가"}
+              {isReceiptUploading
+                ? "분석 중..."
+                : isReceiptReady
+                ? "확인하기"
+                : "영수증으로 자동 추가"}
             </Button>
+
 
             <input
               ref={fileInputRef}
@@ -808,8 +832,8 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
   // 상세 화면: 선택된 보관 위치
   // =========================
 
-  const locationIngredients = getLocationIngredients(selectedLocation);
-  const expiringCount = getExpiringCountForLocation(selectedLocation);
+  const locationIngredients = getLocationIngredients(selectedLocation!);
+  const expiringCount = getExpiringCountForLocation(selectedLocation!);
   const locationInfo = LOCATIONS.find(
     (loc) => loc.name === selectedLocation,
   );
@@ -1183,20 +1207,63 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
 
         {/* ✅ 영수증 인식 결과 Dialog */}
         <Dialog open={isReceiptDialogOpen} onOpenChange={setIsReceiptDialogOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>영수증 인식 결과</DialogTitle>
             </DialogHeader>
 
             <div className="space-y-2">
               {receiptIngredients.map((ing, idx) => (
-                <div key={idx} className="flex justify-between border-b py-1">
-                  <span>{ing.name}</span>
-                  <span>
-                    {ing.quantity} {ing.unit}
-                  </span>
+                <div
+                  key={idx}
+                  className="flex flex-col gap-2 border-b py-3 px-2 relative"
+                >
+                  {/* ✅ X 삭제 버튼 (겹침 방지 위치 고정) */}
+                  <button
+                    className="absolute top-2 right-2 z-10 text-gray-400 hover:text-red-500"
+                    onClick={() => {
+                      setReceiptIngredients(prev =>
+                        prev.filter((_, i) => i !== idx)
+                      );
+                    }}
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+
+                  {/* ✅ 내용 영역 (X랑 안 겹치게 padding-right 확보) */}
+                  <div className="flex justify-between items-center pr-8">
+                    <span className="font-medium">{ing.name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {ing.quantity} {ing.unit}
+                    </span>
+                  </div>
+
+                  <Select
+                    value={ing.location}
+                    onValueChange={(value: string) => {
+                      setReceiptIngredients(prev =>
+                        prev.map((item, i) =>
+                          i === idx ? { ...item, location: value } : item
+                        )
+                      );
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="보관 위치 선택" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LOCATIONS.map(loc => (
+                        <SelectItem key={loc.name} value={loc.name}>
+                          {loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               ))}
+
+
+
             </div>
 
             <DialogFooter>

@@ -98,6 +98,15 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // ✅ AI 레시피만 completed_recipes 저장 허용 (UUID 차단)
+    if (!String(recipeId).startsWith("ai-")) {
+      console.warn("❌ AI 형식 아닌 recipe_id 차단됨:", recipeId);
+      return res.status(400).json({
+        error: "AI 레시피만 완료 기록으로 저장할 수 있습니다.",
+      });
+    }
+
+
     // 🔥 여기서 배열 → JSON 문자열로 변환
     const ingredientsJson = JSON.stringify(ingredients ?? []);
     const stepsJson = JSON.stringify(steps ?? []);
@@ -152,6 +161,72 @@ router.post('/', async (req, res) => {
     });
   }
 });
+
+// ✅ 완료한 레시피 단건 조회 (ID로) + ✅ 유저 무관
+router.get("/:id", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const rows = await query(
+      `
+      SELECT *
+      FROM completed_recipes
+      WHERE recipe_id = ?
+      LIMIT 1
+      `,
+      [id]
+    );
+
+    console.log("✅ raw DB row:", rows[0]);
+    console.log("✅ ingredients_json:", rows[0]?.ingredients_json);
+    console.log("✅ steps_json:", rows[0]?.steps_json);
+
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "레시피 없음" });
+    }
+
+    const r = rows[0];
+
+    // ✅ JSON 안전 파싱
+    const ingredients = Array.isArray(r.ingredients_json)
+      ? r.ingredients_json
+      : r.ingredients_json
+      ? JSON.parse(r.ingredients_json)
+      : [];
+
+    const steps = Array.isArray(r.steps_json)
+      ? r.steps_json
+      : r.steps_json
+      ? JSON.parse(r.steps_json)
+      : [];
+
+    res.setHeader("Cache-Control", "no-store");
+
+    res.json({
+      recipe: {
+        id: r.recipe_id,
+        name: r.name,
+        image: r.image,
+        description: r.description,
+        category: r.category,
+        cooking_method: r.cooking_method,
+        hashtags: r.hashtags,
+        ingredients,
+        steps,
+        completedAt: r.completed_at,
+        cookingTime: r.cooking_time,
+        servings: r.servings,
+        difficulty: r.difficulty,
+      },
+    });
+  } catch (err) {
+    console.error("❌ completed-recipes 단건 조회 실패:", err);
+    res.status(500).json({ error: "서버 오류" });
+  }
+});
+
+
+
 
 
 export default router;

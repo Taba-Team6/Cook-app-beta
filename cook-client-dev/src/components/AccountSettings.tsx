@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/
 import { Separator } from "./ui/separator";
 import { ArrowLeft, User, Mail, Lock, AlertCircle } from "lucide-react";
 import { getCurrentUser, updateProfile } from "../utils/api";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 
 interface AccountSettingsProps {
   onBack: () => void;

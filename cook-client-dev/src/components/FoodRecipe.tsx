@@ -73,13 +73,49 @@ export function FoodRecipe({ recipeId, onStartCookingAssistant, onBack }: FoodRe
         fetchRecipe();
     }, [id]);
 
-    const handleStartAssistant = () => {
-        if (recipe) {
-            // 부모 컴포넌트에 레시피 정보를 전달하고 AI 모드로 전환 요청
-            onStartCookingAssistant(recipe);
-            // 라우팅은 App.tsx에서 처리합니다.
-        }
-    };
+    // 🔹 재료 문자열(ingredients_details)을 줄 단위 배열로 파싱하는 함수
+function parseIngredients(details: string | null): string[] {
+  if (!details) return [];
+  return details
+    .split(/\r?\n/)                      // 줄 단위로 자르고
+    .map((line) => line.trim())         // 앞뒤 공백 제거
+    .filter((line) => line.length > 0)  // 빈 줄 제거
+    .map((line) => {
+      // 불릿 기호(· • - *) 있으면 제거
+      return line.replace(/^[·•\-\*]\s*/, "");
+    });
+}
+
+const handleStartAssistant = () => {
+  if (!recipe) return;
+
+  // 🔹 VoiceAssistant 에서 바로 쓸 수 있는 형태로 변환해서 넘겨줌
+  const fullIngredients = parseIngredients(recipe.ingredients_details);
+
+  const aiRecipe = {
+    // VoiceAssistant 의 Recipe 타입에 맞추기
+    id: recipe.id,
+    name: recipe.name,
+    recipeName: recipe.name,
+    image: recipe.image_large || recipe.image_small,
+    category: recipe.category,
+
+    // 문자열 배열 (재료 전체 문장)
+    fullIngredients,                        
+
+    // name + amount 로 쪼개기 어려우면 우선 name 에만 넣어도 됨
+    ingredients: fullIngredients.map((line) => ({
+      name: line,
+      amount: "",
+    })),
+
+    // 조리순서는 text 만 뽑아서 문자열 배열로
+    steps: recipe.steps.map((s) => s.text),
+  };
+
+  onStartCookingAssistant(aiRecipe as any);
+};
+
 
     if (loading) {
         return (

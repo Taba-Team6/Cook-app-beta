@@ -209,6 +209,33 @@ export async function removeSavedRecipe(id: string) {
   return apiCall(`/recipes/${id}`, { method: "DELETE" }, true);  // ✅ 수정
 }
 
+// ✅ AI 완료 레시피 단건 조회
+export const getCompletedRecipeById = async (id: string) => {
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+
+  const res = await fetch(
+    `http://localhost:3001/api/completed-recipes/${id}`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error("완료된 레시피 조회 실패");
+  }
+
+  return res.json();
+};
+
+
+
+
+
+
+
 // ===============================
 // PUBLIC RECIPES (추가됨)
 // ===============================
@@ -380,8 +407,8 @@ export interface CompletedRecipe {
   image: string | null;
   description: string | null;
   category: string;
-  cooking_method: string | null;
-  hashtags: string | null;
+  cooking_method?: string | null;
+  hashtags?: string | null;
   ingredients: CompletedIngredient[];
   steps: string[];
   completedAt: string;
@@ -400,7 +427,7 @@ export interface CompletedRecipePayload {
   // ✅ 필수 → 선택(Optional)로 변경
   cooking_method?: string | null;
   hashtags?: string | null;
-  
+
   ingredients: CompletedIngredient[]; // 배열 그대로 보냄
   steps: string[];                    // 배열 그대로 보냄
   completedAt: string;
@@ -492,5 +519,24 @@ export async function getCompletedRecipes(): Promise<CompletedRecipe[]> {
   });
 }
 
+export const getSavedRecipeById = async (recipeId: string) => {
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+
+  const res = await fetch(
+    `http://localhost:3001/api/recipes/saved/${recipeId}?t=${Date.now()}`, // ✅ 캐시 무력화 핵심
+    {
+      headers: {
+        "Cache-Control": "no-store",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch saved recipe");
+  }
+
+  return res.json();
+};
 
 

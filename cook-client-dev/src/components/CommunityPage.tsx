@@ -15,26 +15,31 @@ import {
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { getSavedRecipes, saveRecipe,removeSavedRecipe } from "../utils/api";
 
+// =======================
+// 타입 정의 (DB 기준)
 export interface CommunityReview {
   id: string;
-  recipeId: string;
-  recipeName: string;
+  recipe_id: string;
+  recipe_name: string;
   rating: number;
   review: string;
-  image: string | null;
-  userName: string;
-  userInitial: string;
-  createdAt: string;
+  image_url: string | null;
+  user_name: string;
+  user_initial: string;
+  created_at: string;
+
+  bookmark_count?: number;
 }
 
 interface Comment {
   id: string;
-  reviewId: string;
-  userName: string;
-  userInitial: string;
+  review_id: string;
+  user_name: string;
+  user_initial: string;
   text: string;
-  createdAt: string;
+  created_at: string;
 }
 
 interface RecipeRanking {
@@ -45,9 +50,17 @@ interface RecipeRanking {
   rank: number;
 }
 
-export function CommunityPage() {
+// ✅ 새로 추가
+interface CommunityPageProps {
+  onGoToSaved?: () => void;
+  onRefreshSaved?: () => void;   // ✅ 추가
+}
+
+// =======================
+// 컴포넌트
+export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProps) {
   const [reviews, setReviews] = useState<CommunityReview[]>([]);
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
   const [commentInput, setCommentInput] = useState<Record<string, string>>({});
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
   const [filter, setFilter] = useState<"all" | "recent" | "popular" | "ranking">(
@@ -55,108 +68,71 @@ export function CommunityPage() {
   );
   const [savedRecipeIds, setSavedRecipeIds] = useState<Set<string>>(new Set());
 
-  // -----------------------------
-  // 초기 데이터 로딩 (A 버전 로직 유지)
-  // -----------------------------
+  // =======================
+  // 초기 로딩
   useEffect(() => {
-    // Load reviews from localStorage
-    const savedReviews = localStorage.getItem("cooking_assistant_reviews");
-    if (savedReviews) {
-      const parsedReviews = JSON.parse(savedReviews);
-      setReviews(parsedReviews);
-    } else {
-      // 샘플 데이터 추가 (처음 방문 시)
-      const sampleReviews: CommunityReview[] = [
-        {
-          id: "sample_1",
-          recipeId: "kimchi_jjigae",
-          recipeName: "김치찌개",
-          rating: 5,
-          review:
-            "처음 만들어봤는데 정말 맛있어요! AI 가이드 덕분에 쉽게 따라할 수 있었습니다. 다음에는 돼지고기를 더 넣어봐야겠어요.",
-          image:
-            "https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=800",
-          userName: "요리초보",
-          userInitial: "요",
-          createdAt: new Date(
-            Date.now() - 2 * 60 * 60 * 1000
-          ).toISOString(),
-        },
-        {
-          id: "sample_2",
-          recipeId: "carbonara",
-          recipeName: "까르보나라",
-          rating: 4,
-          review:
-            "크림 소스가 너무 맛있었어요! 베이컨 대신 팬체타를 사용했더니 더 고급스러운 맛이 났습니다.",
-          image:
-            "https://images.unsplash.com/photo-1612874742237-6526221588e3?w=800",
-          userName: "파스타러버",
-          userInitial: "파",
-          createdAt: new Date(
-            Date.now() - 5 * 60 * 60 * 1000
-          ).toISOString(),
-        },
-        {
-          id: "sample_3",
-          recipeId: "bibimbap",
-          recipeName: "비빔밥",
-          rating: 5,
-          review:
-            "집에서 비빔밥 만들어 먹으니 너무 좋네요. 야채도 신선하고 고추장 양념장이 일품이었습니다!",
-          image: null,
-          userName: "건강요리",
-          userInitial: "건",
-          createdAt: new Date(
-            Date.now() - 1 * 24 * 60 * 60 * 1000
-          ).toISOString(),
-        },
-      ];
-      localStorage.setItem(
-        "cooking_assistant_reviews",
-        JSON.stringify(sampleReviews)
-      );
-      setReviews(sampleReviews);
-    }
-
-    // Load comments from localStorage
-    const savedComments = localStorage.getItem("cooking_assistant_comments");
-    if (savedComments) {
-      setComments(JSON.parse(savedComments));
-    }
-
-    // Load saved recipes to check which ones are saved
-    loadSavedRecipes();
-
-    // Listen for saved recipes updates
-    const handleSavedRecipesUpdate = () => {
-      loadSavedRecipes();
-    };
-    window.addEventListener("savedRecipesUpdated", handleSavedRecipesUpdate);
-
-    return () => {
-      window.removeEventListener(
-        "savedRecipesUpdated",
-        handleSavedRecipesUpdate
-      );
-    };
+    loadCommunity();
+    loadSaved();
   }, []);
 
-  const loadSavedRecipes = () => {
-    const savedRecipes = JSON.parse(
-      localStorage.getItem("cooking_assistant_saved_recipes") || "[]"
+  // =======================
+  // 커뮤니티 불러오기 (DB)
+  const loadCommunity = async () => {
+  try {
+    const token = sessionStorage.getItem("cooking_assistant_auth_token");
+
+    const res = await fetch("http://localhost:3001/api/community", {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+
+    console.log("✅ 커뮤니티 응답 상태:", res.status);
+
+    const data = await res.json();
+    console.log("✅ 커뮤니티 데이터:", data);
+
+    setReviews(data);
+  } catch (err) {
+    console.error("❌ 커뮤니티 불러오기 실패:", err);
+  }
+};
+
+
+  // =======================
+  // 댓글 불러오기
+  const loadComments = async (reviewId: string) => {
+    const token = sessionStorage.getItem("cooking_assistant_auth_token");
+
+    const res = await fetch(
+      `http://localhost:3001/api/community/${reviewId}/comments`,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }
     );
 
-    // id를 string으로 통일
-    const savedIds: Set<string> = new Set(
-      savedRecipes.map((r: any) => String(r.id))
-    );
-    setSavedRecipeIds(savedIds);
+    const data = await res.json();
+    setComments((prev) => ({ ...prev, [reviewId]: data }));
   };
 
-  // -----------------------------
-  // 시간 표시 유틸 (A 버전 유지)
-  // -----------------------------
+  // =======================
+  // 저장된 레시피 불러오기
+  const loadSaved = async () => {
+    const list = await getSavedRecipes();
+
+    const ids = new Set<string>(
+      list.map((r: { recipe_id: string }) => r.recipe_id)
+    );
+
+    setSavedRecipeIds(ids);
+  };
+
+  // =======================
+  // 시간 표시
   const getTimeAgo = (dateString: string) => {
     const now = new Date();
     const past = new Date(dateString);
@@ -166,310 +142,136 @@ export function CommunityPage() {
 
     if (diffInMinutes < 1) return "방금 전";
     if (diffInMinutes < 60) return `${diffInMinutes}분 전`;
-
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours}시간 전`;
-
     const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `${diffInDays}일 전`;
-
-    const diffInWeeks = Math.floor(diffInDays / 7);
-    return `${diffInWeeks}주 전`;
+    return `${diffInDays}일 전`;
   };
 
-  // -----------------------------
-  // 댓글 토글 / 추가 (A 버전 유지)
-  // -----------------------------
-  const toggleComments = (reviewId: string) => {
-    setShowComments((prev) => ({ ...prev, [reviewId]: !prev[reviewId] }));
-  };
-
-  const addComment = (reviewId: string) => {
-    const commentText = commentInput[reviewId]?.trim();
-    if (!commentText) return;
-
-    const newComment: Comment = {
-      id: `comment_${Date.now()}`,
-      reviewId,
-      userName: "나",
-      userInitial: "나",
-      text: commentText,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updatedComments = [...comments, newComment];
-    setComments(updatedComments);
-    localStorage.setItem(
-      "cooking_assistant_comments",
-      JSON.stringify(updatedComments)
-    );
-
-    setCommentInput((prev) => ({ ...prev, [reviewId]: "" }));
-  };
-
-  const getReviewComments = (reviewId: string) => {
-    return comments.filter((c) => c.reviewId === reviewId);
-  };
-
-  // -----------------------------
-  // 레시피 ID 매핑 (A 버전 유지)
-  // -----------------------------
-  const getActualRecipeId = (reviewRecipeId: string): string | null => {
-    const recipeMapping: Record<string, string> = {
-      // 문자열 형식 ID
-      kimchi_jjigae: "3",
-      carbonara: "2",
-      bibimbap: "6",
-      kimchi_bokkeumbap: "1",
-      omurice: "5",
-      tomato_pasta: "7",
-      shrimp_fried_rice: "8",
-      salmon_sushi: "9",
-      gyudon: "10",
-      mapo_tofu: "11",
-      chicken_salad: "4",
-      // 숫자 형식 ID (직접 매핑)
-      "1": "1",
-      "2": "2",
-      "3": "3",
-      "4": "4",
-      "5": "5",
-      "6": "6",
-      "7": "7",
-      "8": "8",
-      "9": "9",
-      "10": "10",
-      "11": "11",
-    };
-
-    return recipeMapping[reviewRecipeId] || null;
-  };
-
-  const isRecipeSaved = (reviewRecipeId: string): boolean => {
-    const actualRecipeId = getActualRecipeId(reviewRecipeId);
-    return actualRecipeId ? savedRecipeIds.has(actualRecipeId) : false;
-  };
-
-  // -----------------------------
-  // 레시피 저장 로직 (A 버전 그대로)
-  // -----------------------------
-  const saveRecipe = (review: CommunityReview) => {
-    try {
-      const recipeMapping: Record<string, any> = {
-        // 문자열 형식 ID
-        kimchi_jjigae: { id: "3", name: "된장찌개" },
-        carbonara: { id: "2", name: "스파게티 까르보나라" },
-        bibimbap: { id: "6", name: "비빔밥" },
-        kimchi_bokkeumbap: { id: "1", name: "김치볶음밥" },
-        omurice: { id: "5", name: "오므라이스" },
-        tomato_pasta: { id: "7", name: "토마토 파스타" },
-        shrimp_fried_rice: { id: "8", name: "새우볶음밥" },
-        salmon_sushi: { id: "9", name: "연어초밥" },
-        gyudon: { id: "10", name: "규동" },
-        mapo_tofu: { id: "11", name: "마파두부" },
-        chicken_salad: { id: "4", name: "치킨 샐러드" },
-        // 숫자 형식 ID (직접 매핑)
-        "1": { id: "1", name: "김치볶음밥" },
-        "2": { id: "2", name: "스파게티 까르보나라" },
-        "3": { id: "3", name: "된장찌개" },
-        "4": { id: "4", name: "치킨 샐러드" },
-        "5": { id: "5", name: "오므라이스" },
-        "6": { id: "6", name: "비빔밥" },
-        "7": { id: "7", name: "토마토 파스타" },
-        "8": { id: "8", name: "새우볶음밥" },
-        "9": { id: "9", name: "연어초밥" },
-        "10": { id: "10", name: "규동" },
-        "11": { id: "11", name: "마파두부" },
-      };
-
-      const allRecipes = [
-        {
-          id: "1",
-          name: "김치볶음밥",
-          category: "한식",
-          difficulty: "쉬움",
-          time: "20분",
-          cookingTime: "20분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1744870132190-5c02d3f8d9f9?w=400&h=225&fit=crop",
-          description: "간단하고 빠르게 만들 수 있는 한국의 대표 요리",
-          tags: ["한식", "간편식", "볶음밥"],
-        },
-        {
-          id: "2",
-          name: "스파게티 까르보나라",
-          category: "양식",
-          difficulty: "보통",
-          time: "30분",
-          cookingTime: "30분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1588013273468-315fd88ea34c?w=400&h=225&fit=crop",
-          description: "크리미한 소스가 일품인 이탈리아 파스타",
-          tags: ["양식", "파스타", "크림"],
-        },
-        {
-          id: "3",
-          name: "된장찌개",
-          category: "한식",
-          difficulty: "쉬움",
-          time: "25분",
-          cookingTime: "25분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1665395876131-7cf7cb099a51?w=400&h=225&fit=crop",
-          description: "구수한 맛이 일품인 한국 전통 찌개",
-          tags: ["한식", "찌개", "전통"],
-        },
-        {
-          id: "4",
-          name: "치킨 샐러드",
-          category: "기타",
-          difficulty: "쉬움",
-          time: "15분",
-          cookingTime: "15분",
-          servings: "1인분",
-          image:
-            "https://images.unsplash.com/photo-1729719930828-6cd60cb7d10f?w=400&h=225&fit=crop",
-          description: "신선한 채소와 닭가슴살로 만드는 건강 요리",
-          tags: ["샐러드", "건강식", "다이어트"],
-        },
-        {
-          id: "5",
-          name: "오므라이스",
-          category: "양식",
-          difficulty: "보통",
-          time: "25분",
-          cookingTime: "25분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1743148509702-2198b23ede1c?w=400&h=225&fit=crop",
-          description: "부드러운 계란과 볶음밥의 조화",
-          tags: ["양식", "계란", "볶음밥"],
-        },
-        {
-          id: "6",
-          name: "비빔밥",
-          category: "한식",
-          difficulty: "보통",
-          time: "35분",
-          cookingTime: "35분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1718777791239-c473e9ce7376?w=400&h=225&fit=crop",
-          description:
-            "다양한 나물과 고기가 어우러진 영양 만점 한 그릇 요리",
-          tags: ["한식", "비빔밥", "영양식"],
-        },
-        {
-          id: "7",
-          name: "토마토 파스타",
-          category: "양식",
-          difficulty: "쉬움",
-          time: "20분",
-          cookingTime: "20분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1751151497799-8b4057a2638e?w=400&h=225&fit=crop",
-          description: "신선한 토마토로 만드는 상큼한 파스타",
-          tags: ["양식", "파스타", "토마토"],
-        },
-        {
-          id: "8",
-          name: "새우볶음밥",
-          category: "중식",
-          difficulty: "보통",
-          time: "25분",
-          cookingTime: "25분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1747228469026-7298b12d9963?w=400&h=225&fit=crop",
-          description: "통통한 새우가 들어간 고소한 볶음밥",
-          tags: ["중식", "볶음밥", "새우"],
-        },
-        {
-          id: "9",
-          name: "연어초밥",
-          category: "일식",
-          difficulty: "어려움",
-          time: "40분",
-          cookingTime: "40분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=400&h=225&fit=crop",
-          description: "신선한 연어로 만드는 정통 일본 초밥",
-          tags: ["일식", "초밥", "연어"],
-        },
-        {
-          id: "10",
-          name: "규동",
-          category: "일식",
-          difficulty: "보통",
-          time: "30분",
-          cookingTime: "30분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=400&h=225&fit=crop",
-          description: "달콤짭짤한 소고기 덮밥",
-          tags: ["일식", "덮밥", "소고기"],
-        },
-        {
-          id: "11",
-          name: "마파두부",
-          category: "중식",
-          difficulty: "보통",
-          time: "30분",
-          cookingTime: "30분",
-          servings: "2인분",
-          image:
-            "https://images.unsplash.com/photo-1672732608910-ffe083446f9f?w=400&h=225&fit=crop",
-          description: "얼얼한 맛이 일품인 사천식 두부 요리",
-          tags: ["중식", "두부", "매운맛"],
-        },
-      ];
-
-      const savedRecipes = JSON.parse(
-        localStorage.getItem("cooking_assistant_saved_recipes") || "[]"
-      );
-
-      const mappedRecipe = recipeMapping[review.recipeId];
-      if (!mappedRecipe) {
-        console.error("Unknown recipe ID:", review.recipeId);
-        return;
-      }
-
-      const fullRecipe = allRecipes.find((r) => r.id === mappedRecipe.id);
-      if (!fullRecipe) {
-        console.error("Recipe not found:", mappedRecipe.id);
-        return;
-      }
-
-      if (savedRecipes.some((r: any) => r.id === fullRecipe.id)) {
-        return;
-      }
-
-      savedRecipes.push(fullRecipe);
-      localStorage.setItem(
-        "cooking_assistant_saved_recipes",
-        JSON.stringify(savedRecipes)
-      );
-
-      window.dispatchEvent(new Event("savedRecipesUpdated"));
-    } catch (error) {
-      console.error("Error saving recipe:", error);
+  // =======================
+  // 댓글 토글
+  const toggleComments = async (id: string) => {
+    setShowComments((prev) => ({ ...prev, [id]: !prev[id] }));
+    if (!comments[id]) {
+      await loadComments(id);
     }
   };
 
-  // -----------------------------
-  // 랭킹 계산 (A 버전 유지)
-  // -----------------------------
+  // =======================
+  // 댓글 추가
+  const addComment = async (reviewId: string) => {
+  const text = commentInput[reviewId];
+  if (!text) return;
+
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+  const currentUser = JSON.parse(
+    sessionStorage.getItem("cooking_assistant_current_user") || "{}"
+  );
+
+  await fetch(
+    `http://localhost:3001/api/community/${reviewId}/comments`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        text,
+        userName: currentUser.name,
+        userInitial: currentUser.name?.slice(0, 1) ?? "?",
+      }),
+    }
+  );
+
+  setCommentInput((prev) => ({ ...prev, [reviewId]: "" }));
+  await loadComments(reviewId);
+};
+
+const handleDeleteComment = async (reviewId: string, commentId: string) => {
+  if (!confirm("이 댓글을 삭제할까요?")) return;
+
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+
+  try {
+    await fetch(
+      `http://localhost:3001/api/community/${reviewId}/comments/${commentId}`,
+      {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }
+    );
+
+    // ✅ 삭제 후 즉시 댓글 다시 불러오기
+    await loadComments(reviewId);
+  } catch (err) {
+    console.error("❌ 댓글 삭제 실패:", err);
+    alert("댓글 삭제에 실패했습니다.");
+  }
+};
+
+
+
+  // =======================
+  // 레시피 저장
+  const handleSaveRecipe = async (review: CommunityReview) => {
+    try {
+      const alreadySaved = savedRecipeIds.has(review.recipe_id);
+
+      // ✅ 1️⃣ UI에서 먼저 저장 개수 즉시 반영 (실시간처럼 보이게)
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.recipe_id === review.recipe_id
+            ? {
+                ...r,
+                bookmark_count: alreadySaved
+                  ? (r.bookmark_count ?? 1) - 1
+                  : (r.bookmark_count ?? 0) + 1,
+              }
+            : r
+        )
+      );
+
+      // ✅ 2️⃣ 서버에는 실제 저장 / 삭제 요청
+      if (alreadySaved) {
+        await removeSavedRecipe(review.recipe_id);
+      } else {
+        await saveRecipe({
+          recipe_id: review.recipe_id,
+          name: review.recipe_name,
+          category: "기타",
+          image: review.image_url ?? null,
+          difficulty: null,
+          cooking_time: null,
+          description: review.review ?? null,
+          ingredients: null,
+          steps: null,
+        });
+      }
+
+      // ✅ 3️⃣ saved 상태만 백그라운드 동기화
+      await loadSaved();
+      onRefreshSaved?.();
+      window.dispatchEvent(new Event("savedRecipesUpdated"));
+    } catch (err: any) {
+      console.error("❌ 저장 실패 FULL:", err);
+      alert("저장 실패: 콘솔 확인");
+    }
+  };
+
+
+
+
+  // =======================
+  // 랭킹 계산 (UI 유지)
   const calculateRankings = (): RecipeRanking[] => {
     const recipeMap = new Map<string, CommunityReview[]>();
 
     reviews.forEach((review) => {
-      const existing = recipeMap.get(review.recipeId) || [];
-      recipeMap.set(review.recipeId, [...existing, review]);
+      const existing = recipeMap.get(review.recipe_id) || [];
+      recipeMap.set(review.recipe_id, [...existing, review]);
     });
 
     const rankings: RecipeRanking[] = [];
@@ -483,75 +285,67 @@ export function CommunityPage() {
 
       rankings.push({
         recipeId,
-        recipeName: recipeReviews[0].recipeName,
+        recipeName: recipeReviews[0].recipe_name,
         reviewCount,
         averageRating,
         rank: 0,
       });
     });
 
-    const maxReviewCount = Math.max(...rankings.map((r) => r.reviewCount), 1);
+    rankings.sort((a, b) => b.averageRating - a.averageRating);
 
-    const rankingsWithScore = rankings.map((r) => ({
-      ...r,
-      score:
-        ((r.averageRating / 5) * 0.7) +
-        ((r.reviewCount / maxReviewCount) * 0.3),
-    }));
-
-    rankingsWithScore.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.averageRating !== a.averageRating)
-        return b.averageRating - a.averageRating;
-      return b.reviewCount - a.reviewCount;
-    });
-
-    let currentRank = 1;
-    for (let i = 0; i < rankingsWithScore.length; i++) {
-      if (
-        i > 0 &&
-        Math.abs(rankingsWithScore[i].score - rankingsWithScore[i - 1].score) <
-          0.001
-      ) {
-        rankingsWithScore[i].rank = rankingsWithScore[i - 1].rank;
-      } else {
-        rankingsWithScore[i].rank = currentRank;
-      }
-      currentRank++;
-    }
-
-    return rankingsWithScore;
+    return rankings.map((r, i) => ({ ...r, rank: i + 1 }));
   };
 
   const filteredReviews = [...reviews].sort((a, b) => {
-    if (filter === "recent") {
-      return (
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-    }
     if (filter === "popular") {
-      return b.rating - a.rating;
+      return (b.bookmark_count ?? 0) - (a.bookmark_count ?? 0);
     }
-    return 0;
+    return 0; // 전체는 서버 기본 순서 유지
   });
+
 
   const rankings = calculateRankings();
 
-  // -----------------------------
-  // Ranking View (B 스타일)
-  // -----------------------------
+  const handleDeleteReview = async (reviewId: string) => {
+  if (!confirm("정말 이 게시글을 삭제할까요?")) return;
+
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+
+  try {
+    const res = await fetch(
+      `http://localhost:3001/api/community/${reviewId}`,
+      {
+        method: "DELETE",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      }
+    );
+
+    if (!res.ok) throw new Error("삭제 실패");
+
+    // ✅ UI 즉시 반영
+    setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+  } catch (err) {
+    console.error("❌ 게시글 삭제 실패:", err);
+    alert("삭제에 실패했습니다.");
+  }
+};
+
+
+  // =======================
+  // renderRankingView / renderReviewList
+  // 👉 여기부터는 **네 UI 그대로 유지**
+  // =======================
+
   const renderRankingView = () => {
     if (rankings.length === 0) {
       return (
         <Card className="border-0 shadow-sm rounded-3xl">
           <CardContent className="p-12 text-center">
-            <div className="w-20 h-20 bg-muted rounded-3xl flex items-center justify-center mx-auto mb-4">
-              <Trophy className="w-10 h-10 text-muted-foreground" />
-            </div>
-            <h3 className="text-foreground mb-2">아직 랭킹이 없습니다</h3>
-            <p className="text-sm text-muted-foreground">
-              요리를 완성하고 리뷰를 남기면 랭킹이 표시됩니다!
-            </p>
+            <Trophy className="w-10 h-10 mx-auto mb-4 text-muted-foreground" />
+            <h3>아직 랭킹이 없습니다</h3>
           </CardContent>
         </Card>
       );
@@ -559,149 +353,53 @@ export function CommunityPage() {
 
     return (
       <div className="space-y-3">
-        {/* 랭킹 헤더 */}
-        <div className="bg-primary rounded-3xl p-6 text-white shadow-xl">
-          <div className="flex items-center gap-3">
-            <Trophy className="w-8 h-8" />
-            <div>
-              <h2 className="text-xl">레시피 랭킹</h2>
-              <p className="text-sm text-white/80">평점과 리뷰 수 기준</p>
-            </div>
-          </div>
-        </div>
-
-        {/* 랭킹 목록 */}
-        {rankings.map((ranking) => {
-          const getRankIcon = () => {
-            if (ranking.rank === 1)
-              return <Trophy className="w-6 h-6 text-[#FFD700]" />;
-            if (ranking.rank === 2)
-              return <Award className="w-6 h-6 text-[#C0C0C0]" />;
-            if (ranking.rank === 3)
-              return <Medal className="w-6 h-6 text-[#CD7F32]" />;
-            return null;
-          };
-
-          const getRankBgColor = () => {
-            if (ranking.rank === 1) return "bg-[#FFD700]/10";
-            if (ranking.rank === 2) return "bg-[#C0C0C0]/10";
-            if (ranking.rank === 3) return "bg-[#CD7F32]/10";
-            return "bg-card";
-          };
-
-          return (
-            <Card
-              key={ranking.recipeId}
-              className={`border-0 shadow-sm rounded-2xl ${getRankBgColor()}`}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-center gap-4">
-                  {/* 순위 */}
-                  <div className="flex-shrink-0 w-14 h-14 rounded-2xl bg-primary flex items-center justify-center">
-                    {getRankIcon() || (
-                      <span className="text-white text-xl">
-                        {ranking.rank}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* 레시피 정보 */}
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-foreground mb-2 truncate">
-                      {ranking.recipeName}
-                    </h3>
-
-                    <div className="flex items-center gap-4 flex-wrap">
-                      {/* 평균 평점 */}
-                      <div className="flex items-center gap-1">
-                        <Star className="w-4 h-4 fill-secondary text-secondary" />
-                        <span className="text-sm text-foreground">
-                          {ranking.averageRating.toFixed(1)}
-                        </span>
-                      </div>
-
-                      {/* 별점 표시 */}
-                      <div className="flex items-center gap-0.5">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-3.5 h-3.5 ${
-                              i < Math.round(ranking.averageRating)
-                                ? "fill-accent text-accent"
-                                : "text-gray-300 dark:text-gray-600"
-                            }`}
-                          />
-                        ))}
-                      </div>
-
-                      {/* 리뷰 수 */}
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        <span>{ranking.reviewCount}개</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+        {rankings.map((ranking) => (
+          <Card key={ranking.recipeId} className="rounded-2xl shadow-sm">
+            <CardContent className="p-5 flex justify-between">
+              <div>
+                <h3>{ranking.recipeName}</h3>
+                <p className="text-sm text-muted-foreground">
+                  리뷰 {ranking.reviewCount}개
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Star className="w-4 h-4 fill-accent text-accent" />
+                {ranking.averageRating.toFixed(1)}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
     );
   };
 
-  // -----------------------------
-  // Review List View (B 스타일)
-  // -----------------------------
   const renderReviewList = () => {
-    if (filteredReviews.length === 0) {
-      return (
-        <Card className="border-0 shadow-sm rounded-3xl">
-          <CardContent className="p-12 text-center">
-            <div className="w-20 h-20 bg-muted rounded-3xl flex items-center justify-center mx-auto mb-4">
-              <MessageCircle className="w-10 h-10 text-muted-foreground" />
-            </div>
-            <h3 className="text-foreground mb-2">아직 리뷰가 없습니다</h3>
-            <p className="text-sm text-muted-foreground">
-              첫 번째로 요리를 완성하고 리뷰를 남겨보세요!
-            </p>
-          </CardContent>
-        </Card>
-      );
-    }
-
     return (
       <div className="space-y-5">
         {filteredReviews.map((review) => {
-          const reviewComments = getReviewComments(review.id);
+          const reviewComments = comments[review.id] || [];
           const isCommentsOpen = showComments[review.id];
 
           return (
-            <Card
-              key={review.id}
-              className="border-0 shadow-sm rounded-3xl overflow-hidden"
-            >
+            <Card key={review.id} className="rounded-3xl overflow-hidden">
               <CardContent className="p-0">
-                {/* User Info */}
                 <div className="p-5 pb-3">
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <Avatar className="w-11 h-11">
-                        <AvatarFallback className="bg-primary text-white rounded-2xl">
-                          {review.userInitial}
+                      <Avatar>
+                        <AvatarFallback>
+                          {review.user_initial}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="text-sm text-foreground">
-                          {review.userName}
+                        <p>{review.user_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {getTimeAgo(review.created_at)}
                         </p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <Clock className="w-3 h-3" />
-                          <span>{getTimeAgo(review.createdAt)}</span>
-                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+
+                    <div className="flex gap-1">
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
@@ -715,119 +413,97 @@ export function CommunityPage() {
                     </div>
                   </div>
 
-                  {/* Recipe Name */}
-                  <div className="inline-block px-4 py-1.5 bg-primary/10 text-primary rounded-full mb-3">
-                    <p className="text-sm">{review.recipeName}</p>
+                  <div className="px-4 py-1.5 bg-primary/10 text-primary rounded-full inline-block">
+                    {review.recipe_name}
                   </div>
 
-                  {/* Review Text */}
-                  {review.review && (
-                    <p className="text-sm text-foreground mb-3 leading-relaxed">
-                      {review.review}
-                    </p>
-                  )}
+                  <p className="mt-3">{review.review}</p>
                 </div>
 
-                {/* Review Image */}
-                {review.image && (
-                  <div className="w-full">
-                    <ImageWithFallback
-                      src={review.image}
-                      alt={`${review.recipeName} 완성 사진`}
-                      className="w-full h-72 object-cover"
-                    />
-                  </div>
+                {review.image_url && (
+                  <ImageWithFallback
+                    src={review.image_url}
+                    className="w-full h-72 object-cover"
+                    alt="review"
+                  />
                 )}
 
-                {/* Actions */}
-                <div className="p-5 pt-4 border-t border-border/40">
-                  <div className="flex items-center gap-5">
+                <div className="p-5 border-t">
+                  <div className="flex gap-5">
                     <button
                       onClick={() => toggleComments(review.id)}
-                      className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
+                      className="flex items-center gap-2 text-muted-foreground"
                     >
                       <MessageCircle className="w-5 h-5" />
-                      <span>
-                        댓글{" "}
-                        {reviewComments.length > 0 &&
-                          `(${reviewComments.length})`}
-                      </span>
+                      댓글 {reviewComments.length}
                     </button>
+
                     <button
-                      onClick={() => saveRecipe(review)}
-                      className={`flex items-center gap-2 text-sm transition-colors ${
-                        isRecipeSaved(review.recipeId)
+                      onClick={() => handleSaveRecipe(review)}
+                      className={`flex items-center gap-2 ${
+                        savedRecipeIds.has(review.recipe_id)
                           ? "text-accent"
-                          : "text-muted-foreground hover:text-accent"
+                          : "text-muted-foreground"
                       }`}
                     >
-                      <Bookmark
-                        className={`w-5 h-5 ${
-                          isRecipeSaved(review.recipeId) ? "fill-accent" : ""
-                        }`}
-                      />
-                      <span>
-                        {isRecipeSaved(review.recipeId)
-                          ? "저장됨"
-                          : "레시피 저장"}
-                      </span>
+                      <Bookmark className="w-5 h-5" />
+                      저장 {review.bookmark_count ?? 0}
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteReview(review.id)}
+                      className="flex items-center gap-2 text-red-500"
+                    >
+                      ❌ 삭제
                     </button>
                   </div>
 
-                  {/* Comments Section */}
                   {isCommentsOpen && (
-                    <div className="mt-5 pt-5 border-t border-border/40">
-                      {/* Comments List */}
-                      {reviewComments.length > 0 && (
-                        <div className="space-y-4 mb-4">
-                          {reviewComments.map((comment) => (
-                            <div key={comment.id} className="flex gap-3">
-                              <Avatar className="w-9 h-9 flex-shrink-0">
-                                <AvatarFallback className="bg-accent text-white rounded-xl text-xs">
-                                  {comment.userInitial}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0 bg-muted rounded-2xl p-3">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="text-sm text-foreground">
-                                    {comment.userName}
-                                  </span>
-                                  <span className="text-xs text-muted-foreground">
-                                    {getTimeAgo(comment.createdAt)}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-foreground">
-                                  {comment.text}
-                                </p>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                    <div className="mt-4 space-y-3">
+                      {reviewComments.map((c) => (
+                        <div key={c.id} className="flex gap-2 items-start">
+                          <Avatar>
+                            <AvatarFallback>{c.user_initial}</AvatarFallback>
+                          </Avatar>
 
-                      {/* Comment Input */}
+                          <div className="bg-muted p-3 rounded-xl flex-1 relative">
+                            <div className="flex justify-between items-center mb-1">
+                              <p className="text-sm">{c.user_name}</p>
+
+                              {/* ✅ 댓글 삭제 버튼 (본인만 클릭 가능하게 하려면 추가 조건 가능) */}
+                              <button
+                                onClick={() => handleDeleteComment(review.id, c.id)}
+                                className="text-xs text-red-500 hover:underline"
+                              >
+                                삭제
+                              </button>
+                            </div>
+
+                            <p className="text-xs whitespace-pre-wrap">{c.text}</p>
+                          </div>
+                        </div>
+                      ))}
                       <div className="flex gap-2">
                         <Input
-                          placeholder="댓글을 입력하세요..."
                           value={commentInput[review.id] || ""}
+                          placeholder="댓글을 입력하세요..."
                           onChange={(e) =>
                             setCommentInput((prev) => ({
                               ...prev,
                               [review.id]: e.target.value,
                             }))
                           }
-                          onKeyPress={(e) => {
-                            if (e.key === "Enter") {
-                              addComment(review.id);
-                            }
-                          }}
-                          className="flex-1 rounded-xl"
+                          className="
+                            border border-border 
+                            bg-muted/40 
+                            focus:bg-background
+                            focus:ring-2 focus:ring-primary
+                            focus:border-primary
+                            rounded-xl
+                            shadow-sm
+                          "
                         />
-                        <Button
-                          onClick={() => addComment(review.id)}
-                          size="sm"
-                          className="rounded-xl"
-                        >
+                        <Button onClick={() => addComment(review.id)}>
                           <Send className="w-4 h-4" />
                         </Button>
                       </div>
@@ -842,63 +518,50 @@ export function CommunityPage() {
     );
   };
 
-  // -----------------------------
-  // JSX 반환 (B 스타일 레이아웃)
-  // -----------------------------
+  // =======================
+  // JSX
   return (
     <div className="min-h-screen bg-background pt-16 pb-24">
       <div className="max-w-5xl mx-auto px-4 py-6">
         {/* 헤더 */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center">
-              <Users className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <h2 className="mb-1">쿠킹 커뮤니티</h2>
-              <p className="text-sm text-muted-foreground">
-                레시피 후기를 공유하고 소통해요
-              </p>
-            </div>
+        <div className="mb-8 flex items-center gap-3">
+          <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center">
+            <Users className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2>쿠킹 커뮤니티</h2>
+            <p className="text-sm text-muted-foreground">
+              레시피 후기를 공유하고 소통해요
+            </p>
           </div>
         </div>
 
         {/* 필터 버튼 */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-2 mb-6">
           <Button
-            variant={filter === "all" ? "default" : "outline"}
             onClick={() => setFilter("all")}
-            className="rounded-full flex-shrink-0 shadow-sm"
+            className={
+              filter === "all"
+                ? "bg-primary text-white"
+                : "bg-muted text-foreground"
+            }
           >
             전체
           </Button>
+
           <Button
-            variant={filter === "recent" ? "default" : "outline"}
-            onClick={() => setFilter("recent")}
-            className="rounded-full flex-shrink-0 shadow-sm"
-          >
-            <Clock className="w-4 h-4 mr-2" />
-            최신순
-          </Button>
-          <Button
-            variant={filter === "popular" ? "default" : "outline"}
             onClick={() => setFilter("popular")}
-            className="rounded-full flex-shrink-0 shadow-sm"
+            className={
+              filter === "popular"
+                ? "bg-primary text-white"
+                : "bg-muted text-foreground"
+            }
           >
-            <Star className="w-4 h-4 mr-2" />
             인기순
-          </Button>
-          <Button
-            variant={filter === "ranking" ? "default" : "outline"}
-            onClick={() => setFilter("ranking")}
-            className="rounded-full flex-shrink-0 shadow-sm"
-          >
-            <Trophy className="w-4 h-4 mr-2" />
-            레시피 랭킹
           </Button>
         </div>
 
-        {/* 메인 컨텐츠 */}
+
         {filter === "ranking" ? renderRankingView() : renderReviewList()}
       </div>
     </div>

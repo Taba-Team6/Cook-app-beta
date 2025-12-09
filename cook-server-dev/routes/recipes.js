@@ -729,4 +729,36 @@ router.get('/history', async (req, res) => {
   }
 });
 
+// ✅ 저장한 레시피 단건 조회 (user_id 무시 버전)
+router.get("/saved/:recipeId", authenticateToken, async (req, res) => {
+  const { recipeId } = req.params;
+
+  try {
+    const rows = await query(
+      `
+      SELECT *
+      FROM saved_recipes
+      WHERE recipe_id = ?
+      ORDER BY saved_at DESC
+      LIMIT 1
+      `,
+      [recipeId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "저장된 레시피를 찾을 수 없습니다." });
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    res.json(rows[0]);
+
+  } catch (e) {
+    console.error("❌ saved recipe fetch error:", e);
+    res.status(500).json({ message: "저장 레시피 조회 실패" });
+  }
+});
+
+
+
+
 export default router;
