@@ -730,33 +730,60 @@ router.get('/history', async (req, res) => {
 });
 
 // ✅ 저장한 레시피 단건 조회 (user_id 무시 버전)
-router.get("/saved/:recipeId", authenticateToken, async (req, res) => {
-  const { recipeId } = req.params;
+// ✅ 완료한 레시피 단건 조회 (AI + 공개 레시피 모두 대응)
+router.get("/:id", async (req, res) => {
+  const { id } = req.params;
 
   try {
     const rows = await query(
       `
       SELECT *
-      FROM saved_recipes
-      WHERE recipe_id = ?
-      ORDER BY saved_at DESC
+      FROM completed_recipes
+      WHERE id = ? OR recipe_id = ?
       LIMIT 1
       `,
-      [recipeId]
+      [id, id]
     );
 
-    if (rows.length === 0) {
-      return res.status(404).json({ message: "저장된 레시피를 찾을 수 없습니다." });
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "레시피 없음" });
     }
 
-    res.setHeader("Cache-Control", "no-store");
-    res.json(rows[0]);
+    const r = rows[0];
 
-  } catch (e) {
-    console.error("❌ saved recipe fetch error:", e);
-    res.status(500).json({ message: "저장 레시피 조회 실패" });
+    const ingredients = r.ingredients_json
+      ? JSON.parse(r.ingredients_json)
+      : [];
+
+    const steps = r.steps_json
+      ? JSON.parse(r.steps_json)
+      : [];
+
+    res.setHeader("Cache-Control", "no-store");
+
+    res.json({
+      recipe: {
+        id: r.id,                      // ✅ 이제 진짜 DB id 반환
+        name: r.name,
+        image: r.image,
+        description: r.description,
+        category: r.category,
+        cooking_method: r.cooking_method,
+        hashtags: r.hashtags,
+        ingredients,
+        steps,
+        completedAt: r.completed_at,
+        cookingTime: r.cooking_time,
+        servings: r.servings,
+        difficulty: r.difficulty,
+      },
+    });
+  } catch (err) {
+    console.error("❌ completed-recipes 단건 조회 실패:", err);
+    res.status(500).json({ error: "서버 오류" });
   }
 });
+
 
 
 

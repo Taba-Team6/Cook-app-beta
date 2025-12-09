@@ -100,6 +100,10 @@ export function VoiceAssistant({
   // ❗ 치명적인 에러(not-allowed) 발생 시 자동 재시작 막기 위한 플래그
   const hardErrorRef = useRef(false);
 
+  console.log("✅ recipeInfo:", recipeInfo);
+  console.log("✅ isFinished:", isFinished);
+
+
   // keep wake active ref synced
   useEffect(() => {
     isWakeActiveRef.current = isWakeActive;
@@ -819,7 +823,6 @@ useEffect(() => {
 
     try {
       const payload = {
-        // ✅ ⭐️ 이게 제일 중요
         id: recipeInfo.id ?? crypto.randomUUID(),
 
         name: recipeInfo.name ?? recipeInfo.recipeName ?? "이름 없는 레시피",
@@ -827,7 +830,6 @@ useEffect(() => {
         description: recipeInfo.description ?? null,
         category: recipeInfo.category ?? "기타",
 
-        // ✅ ⭐️ ingredients 구조 반드시 맞춰야 함
         ingredients: Array.isArray(recipeInfo.ingredients)
           ? recipeInfo.ingredients.map((ing: any) =>
               typeof ing === "string"
@@ -839,7 +841,6 @@ useEffect(() => {
             )
           : [],
 
-        // ✅ steps는 문자열 배열 OK
         steps: Array.isArray(recipeInfo.steps)
           ? recipeInfo.steps.map((s: any) => String(s))
           : [],
@@ -853,16 +854,21 @@ useEffect(() => {
 
       console.log("✅ 최종 전송 payload:", payload);
 
-      console.log("✅ DB 저장 성공");
+      // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
+      await addCompletedRecipe(payload);   // 🔥🔥🔥 이게 핵심
+      // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
 
+      toast.success("완료한 요리가 저장되었습니다!");
+
+      // ✅ App.tsx에 완료 이벤트 전달 → 완료 목록 갱신
       onCookingComplete?.(recipeInfo);
-      onRecipeSelect(recipeInfo);
 
     } catch (err) {
       console.error("❌ 완료 레시피 저장 실패:", err);
       toast.error("완료한 레시피 저장에 실패했습니다.");
     }
   };
+
 
 
 
@@ -1031,14 +1037,17 @@ useEffect(() => {
             </div>
           )}
 
+
           <Button
             className="w-full mt-1"
             size="lg"
-            onClick={handleCompleteCooking}
+            onClick={() => onCookingComplete?.(recipeInfo as any)}
             disabled={!recipeInfo || !isFinished}
           >
             요리 완료
           </Button>
+
+          
 
           {!isFinished && recipeInfo && (
             <p className="text-[11px] text-muted-foreground text-center">

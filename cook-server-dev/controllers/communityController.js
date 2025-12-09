@@ -9,8 +9,11 @@ export const getCommunityReviews = async (req, res) => {
     const [rows] = await pool.query(`
       SELECT 
         c.*,
+        r.image_large AS recipe_image,   -- ✅ 원본 레시피 이미지 추가
         COUNT(sr.id) AS bookmark_count
       FROM community_reviews c
+      LEFT JOIN recipes r
+        ON c.recipe_id = r.id
       LEFT JOIN saved_recipes sr 
         ON c.recipe_id = sr.recipe_id
       GROUP BY c.id
@@ -23,6 +26,7 @@ export const getCommunityReviews = async (req, res) => {
     res.status(500).json({ message: "커뮤니티 조회 실패" });
   }
 };
+
 
 /**
  * ✅ 커뮤니티 리뷰 작성
@@ -126,16 +130,15 @@ export const createCommunityComment = async (req, res) => {
  */
 export const deleteCommunityReview = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { reviewId } = req.params;   // ✅ 이름 맞춤
     const userId = req.user.id;
 
-    // ✅ 본인 글만 삭제 가능
     const [result] = await pool.query(
       `
       DELETE FROM community_reviews
       WHERE id = ? AND user_id = ?
       `,
-      [id, userId]
+      [reviewId, userId]
     );
 
     if (result.affectedRows === 0) {

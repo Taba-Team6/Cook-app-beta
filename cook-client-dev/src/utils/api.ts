@@ -438,15 +438,26 @@ export interface CompletedRecipePayload {
 
 // 한 건 추가 (POST)
 export async function addCompletedRecipe(payload: CompletedRecipePayload) {
-  return apiCall(
-    "/completed-recipes",
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+
+  const res = await fetch("http://localhost:3001/api/completed-recipes", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    true
-  );
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("❌ completed-recipes 저장 실패:", errorText);
+    throw new Error("completed-recipes 저장 실패");
+  }
+
+  return res.json();
 }
+
 
 // 목록 가져오기 (GET) → CompletedRecipe[] 로 변환해서 반환
 export async function getCompletedRecipes(): Promise<CompletedRecipe[]> {
@@ -519,24 +530,9 @@ export async function getCompletedRecipes(): Promise<CompletedRecipe[]> {
   });
 }
 
+  // ✅ 기존 호출부 유지용 "브리지 함수"
 export const getSavedRecipeById = async (recipeId: string) => {
-  const token = sessionStorage.getItem("cooking_assistant_auth_token");
-
-  const res = await fetch(
-    `http://localhost:3001/api/recipes/saved/${recipeId}?t=${Date.now()}`, // ✅ 캐시 무력화 핵심
-    {
-      headers: {
-        "Cache-Control": "no-store",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    }
-  );
-
-  if (!res.ok) {
-    throw new Error("Failed to fetch saved recipe");
-  }
-
-  return res.json();
+  return getCompletedRecipeById(recipeId);
 };
 
 

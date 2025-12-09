@@ -91,29 +91,29 @@ function dedupeCompletedRecipes(list: CompletedRecipe[]): CompletedRecipe[] {
   const map = new Map<string, CompletedRecipe>();
 
   for (const item of list) {
-    const key = item.name || item.id; // 기본은 name 기준
+    const key = item.name || item.id;
 
     const existing = map.get(key);
     if (!existing) {
       map.set(key, item);
     } else {
-      // 🔥 이제는 "더 오래된 completedAt"을 남기기
-      const prevTime = new Date(existing.completedAt).getTime(); // 이미 저장된 것
-      const curTime = new Date(item.completedAt).getTime();      // 새로 온 것
+      const prevTime = new Date(existing.completedAt).getTime();
+      const curTime = new Date(item.completedAt).getTime();
 
-      // 새로 온 게 더 예~전에 한 거면 그걸로 교체
-      if (curTime < prevTime) {
+      // ✅ "더 최신 것만 유지"
+      if (curTime > prevTime) {
         map.set(key, item);
       }
     }
   }
 
-  // 최신순 정렬해서 반환
   return Array.from(map.values()).sort(
     (a, b) =>
-      new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+      new Date(b.completedAt).getTime() -
+      new Date(a.completedAt).getTime()
   );
 }
+
 
 
 export default function App() {
@@ -437,45 +437,44 @@ try {
 
   const handleSavedRecipeClick = async (recipeId: string) => {
   try {
-    // ✅ AI 레시피는 completed_recipes 기준으로만 연다
-    if (recipeId.startsWith("ai-")) {
-      const completedRes = await getCompletedRecipeById(recipeId); 
-      const completed = completedRes?.recipe;   // ✅✅✅ 이게 핵심
+    // ✅ 1️⃣ 먼저 completed_recipes에서 조회 시도 (AI 레시피)
+    try {
+      const completedRes = await getCompletedRecipeById(recipeId);
+      const completed = completedRes?.recipe;
 
-      if (!completed) {
-        alert("완료된 AI 레시피를 찾을 수 없습니다.");
-        return;
+      if (completed) {
+        const aiRecipe: AiRecipe = {
+          id: completed.id,
+          name: completed.name,
+          description: completed.description ?? undefined,
+          image: completed.image ?? undefined,
+          category: completed.category,
+          cookingTime: completed.cookingTime ?? null,
+          servings: completed.servings ?? null,
+          difficulty: completed.difficulty ?? null,
+
+          ingredients: completed.ingredients.map((i: any) => ({
+            name: i.name,
+            amount: i.amount,
+          })),
+
+          steps: completed.steps,
+
+          fullIngredients: completed.ingredients.map((i: any) => {
+            const amount = i.amount ? ` ${i.amount}` : "";
+            return `• ${i.name}${amount}`;
+          }),
+        };
+
+        setInitialAiRecipe(aiRecipe);
+        navigateToStep("voice-assistant");
+        return; // ✅ 여기서 끝 (AI 레시피)
       }
-
-      const aiRecipe: AiRecipe = {
-        id: completed.id,
-        name: completed.name,
-        description: completed.description ?? undefined,
-        image: completed.image ?? undefined,
-        category: completed.category,
-        cookingTime: completed.cookingTime ?? null,
-        servings: completed.servings ?? null,
-        difficulty: completed.difficulty ?? null,
-
-        ingredients: completed.ingredients.map((i: any) => ({
-          name: i.name,
-          amount: i.amount,
-        })),
-
-        steps: completed.steps,
-
-        fullIngredients: completed.ingredients.map((i: any) => {
-          const amount = i.amount ? ` ${i.amount}` : "";
-          return `• ${i.name}${amount}`;
-        }),
-      };
-
-      setInitialAiRecipe(aiRecipe);
-      navigateToStep("voice-assistant");
-      return;
+    } catch (e) {
+      // ✅ completed_recipes에 없으면 그냥 일반 레시피로 처리
     }
 
-    // ✅ 일반 DB 레시피는 기존 로직 유지
+    // ✅ 2️⃣ 일반 공개 레시피
     setInitialAiRecipe(null);
     handleRecipeClick(recipeId);
 
@@ -562,7 +561,7 @@ const openVoiceAssistantFresh = () => {
   // ------------------------------
   const handleVoiceRecipeSelect = async (recipe: any) => {
     const converted: RecipeDetailData = {
-      id: "ai-" + Date.now(),
+      id: recipe.id,
       name: recipe.recipeName ?? "AI 추천 레시피",
       image: null,
       description: recipe.description ?? null,
@@ -694,9 +693,10 @@ const openVoiceAssistantFresh = () => {
 
 const handleCookingCompleteFromAI = async (recipe: AiRecipe) => {
   const recipeId =
-    recipe.id && recipe.id.trim() !== ""
-      ? recipe.id
-      : `ai-${Date.now()}`;
+  recipe.id && recipe.id.trim() !== ""
+    ? recipe.id
+    : String(Date.now());   // ✅ ai- 절대 붙이지 마라
+
 
   const completedAt = new Date().toISOString();
 

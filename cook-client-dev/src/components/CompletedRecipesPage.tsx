@@ -100,11 +100,12 @@ export function CompletedRecipesPage({
 
               return (
                 <Card
-                  key={`${title}-${recipe.completedAt}-${index}`}
+                  key={recipe.id}
                   className="hover:border-primary/40 transition-all cursor-pointer rounded-2xl"
                   onClick={() => onRecipeClick?.(recipe)}
                 >
-                  <div className="flex">
+                  <div className="flex items-center">
+
 
                     {/* ✅ LEFT IMAGE (기존 ImageWithFallback 유지) */}
                     <div className="w-28 h-24 rounded-l-xl overflow-hidden bg-muted">

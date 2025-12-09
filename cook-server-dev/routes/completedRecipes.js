@@ -8,6 +8,7 @@ const router = express.Router();
 // ✅ 이 라우트 전체는 로그인 해야만 접근 가능
 router.use(authenticateToken);
 
+
 // 🔧 MySQL DATETIME 형식으로 변환하는 헬퍼
 function toMySqlDateTime(value) {
   const d = value ? new Date(value) : new Date();
@@ -98,13 +99,7 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // ✅ AI 레시피만 completed_recipes 저장 허용 (UUID 차단)
-    if (!String(recipeId).startsWith("ai-")) {
-      console.warn("❌ AI 형식 아닌 recipe_id 차단됨:", recipeId);
-      return res.status(400).json({
-        error: "AI 레시피만 완료 기록으로 저장할 수 있습니다.",
-      });
-    }
+    
 
 
     // 🔥 여기서 배열 → JSON 문자열로 변환
@@ -162,7 +157,8 @@ router.post('/', async (req, res) => {
   }
 });
 
-// ✅ 완료한 레시피 단건 조회 (ID로) + ✅ 유저 무관
+// ✅ 완료한 레시피 단건 조회 (ID로)
+// ✅ 완료한 레시피 단건 조회 (recipe_id 기준 단일 조회)
 router.get("/:id", async (req, res) => {
   const { id } = req.params;
 
@@ -174,12 +170,10 @@ router.get("/:id", async (req, res) => {
       WHERE recipe_id = ?
       LIMIT 1
       `,
-      [id]
+      [id]   // ✅ 파라미터 1개만 전달
     );
 
     console.log("✅ raw DB row:", rows[0]);
-    console.log("✅ ingredients_json:", rows[0]?.ingredients_json);
-    console.log("✅ steps_json:", rows[0]?.steps_json);
 
     if (!rows || rows.length === 0) {
       return res.status(404).json({ error: "레시피 없음" });
@@ -187,18 +181,19 @@ router.get("/:id", async (req, res) => {
 
     const r = rows[0];
 
-    // ✅ JSON 안전 파싱
+    // ✅ JSON 파싱 안전 처리
     const ingredients = Array.isArray(r.ingredients_json)
       ? r.ingredients_json
-      : r.ingredients_json
-      ? JSON.parse(r.ingredients_json)
-      : [];
+      : typeof r.ingredients_json === "string"
+        ? JSON.parse(r.ingredients_json)
+        : [];
 
     const steps = Array.isArray(r.steps_json)
       ? r.steps_json
-      : r.steps_json
-      ? JSON.parse(r.steps_json)
-      : [];
+      : typeof r.steps_json === "string"
+        ? JSON.parse(r.steps_json)
+        : [];
+
 
     res.setHeader("Cache-Control", "no-store");
 
@@ -224,7 +219,6 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ error: "서버 오류" });
   }
 });
-
 
 
 

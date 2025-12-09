@@ -16,6 +16,8 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { getSavedRecipes, saveRecipe,removeSavedRecipe } from "../utils/api";
+import { getCompletedRecipeById } from "../utils/api";
+
 
 // =======================
 // 타입 정의 (DB 기준)
@@ -31,6 +33,7 @@ export interface CommunityReview {
   created_at: string;
 
   bookmark_count?: number;
+  recipe_image?: string | null;
 }
 
 interface Comment {
@@ -216,50 +219,60 @@ const handleDeleteComment = async (reviewId: string, commentId: string) => {
 
   // =======================
   // 레시피 저장
-  const handleSaveRecipe = async (review: CommunityReview) => {
-    try {
-      const alreadySaved = savedRecipeIds.has(review.recipe_id);
 
-      // ✅ 1️⃣ UI에서 먼저 저장 개수 즉시 반영 (실시간처럼 보이게)
-      setReviews((prev) =>
-        prev.map((r) =>
-          r.recipe_id === review.recipe_id
-            ? {
-                ...r,
-                bookmark_count: alreadySaved
-                  ? (r.bookmark_count ?? 1) - 1
-                  : (r.bookmark_count ?? 0) + 1,
-              }
-            : r
-        )
-      );
 
-      // ✅ 2️⃣ 서버에는 실제 저장 / 삭제 요청
-      if (alreadySaved) {
-        await removeSavedRecipe(review.recipe_id);
-      } else {
-        await saveRecipe({
-          recipe_id: review.recipe_id,
-          name: review.recipe_name,
-          category: "기타",
-          image: review.image_url ?? null,
-          difficulty: null,
-          cooking_time: null,
-          description: review.review ?? null,
-          ingredients: null,
-          steps: null,
-        });
-      }
+const handleSaveRecipe = async (review: CommunityReview) => {
+  try {
+    const alreadySaved = savedRecipeIds.has(review.recipe_id);
 
-      // ✅ 3️⃣ saved 상태만 백그라운드 동기화
-      await loadSaved();
-      onRefreshSaved?.();
-      window.dispatchEvent(new Event("savedRecipesUpdated"));
-    } catch (err: any) {
-      console.error("❌ 저장 실패 FULL:", err);
-      alert("저장 실패: 콘솔 확인");
+    // ✅ UI 북마크 수 즉시 반영
+    setReviews((prev) =>
+      prev.map((r) =>
+        r.recipe_id === review.recipe_id
+          ? {
+              ...r,
+              bookmark_count: alreadySaved
+                ? (r.bookmark_count ?? 1) - 1
+                : (r.bookmark_count ?? 0) + 1,
+            }
+          : r
+      )
+    );
+
+    if (alreadySaved) {
+      await removeSavedRecipe(review.recipe_id);
+    } else {
+      // ✅ ✅ ✅ AI 완료 레시피에서 이미지 가져오기 (정상 경로)
+      const recipeRes = await getCompletedRecipeById(review.recipe_id);
+
+      const imageFromRecipe =
+        recipeRes?.recipe?.image ??
+        recipeRes?.image ??
+        null;
+
+      await saveRecipe({
+        recipe_id: review.recipe_id,
+        name: review.recipe_name,
+        category: "기타",
+        image: imageFromRecipe,
+        difficulty: null,
+        cooking_time: null,
+        description: review.review ?? null,
+        ingredients: [],
+        steps: [],
+      });
     }
-  };
+
+    await loadSaved();
+    onRefreshSaved?.();
+    window.dispatchEvent(new Event("savedRecipesUpdated"));
+  } catch (err) {
+    console.error("❌ 커뮤니티 저장 실패:", err);
+    alert("저장 실패: 콘솔 확인");
+  }
+};
+
+
 
 
 
@@ -379,6 +392,7 @@ const handleDeleteComment = async (reviewId: string, commentId: string) => {
         {filteredReviews.map((review) => {
           const reviewComments = comments[review.id] || [];
           const isCommentsOpen = showComments[review.id];
+          const displayImage = review.image_url ?? review.recipe_image ?? null;
 
           return (
             <Card key={review.id} className="rounded-3xl overflow-hidden">
@@ -420,13 +434,14 @@ const handleDeleteComment = async (reviewId: string, commentId: string) => {
                   <p className="mt-3">{review.review}</p>
                 </div>
 
-                {review.image_url && (
+                {displayImage && (
                   <ImageWithFallback
-                    src={review.image_url}
+                    src={displayImage}
                     className="w-full h-72 object-cover"
                     alt="review"
                   />
                 )}
+
 
                 <div className="p-5 border-t">
                   <div className="flex gap-5">
@@ -450,12 +465,17 @@ const handleDeleteComment = async (reviewId: string, commentId: string) => {
                       저장 {review.bookmark_count ?? 0}
                     </button>
 
-                    <button
-                      onClick={() => handleDeleteReview(review.id)}
-                      className="flex items-center gap-2 text-red-500"
-                    >
-                      ❌ 삭제
-                    </button>
+                    {review.user_name ===
+                      JSON.parse(
+                        sessionStorage.getItem("cooking_assistant_current_user") || "{}"
+                      )?.name && (
+                      <button
+                        onClick={() => handleDeleteReview(review.id)}
+                        className="flex items-center gap-2 text-red-500"
+                      >
+                        ❌ 삭제
+                      </button>
+                    )}
                   </div>
 
                   {isCommentsOpen && (
