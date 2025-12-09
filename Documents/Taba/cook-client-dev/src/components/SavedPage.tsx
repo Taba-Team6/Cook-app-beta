@@ -1,14 +1,16 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Bookmark, X } from "lucide-react";
+import { Bookmark, Clock, X } from "lucide-react";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import { Button } from "./ui/button";
+
+// ✔ RecipeListPage의 Recipe 타입 가져오기
 import type { Recipe } from "./RecipeListPage";
 
 interface SavedPageProps {
   savedRecipes?: Recipe[];
   onRecipeClick?: (id: string) => void;
-  onRemoveSaved?: (recipe: Recipe) => void;
+  onRemoveSaved?: (recipe: Recipe) => void; 
 }
 
 export function SavedPage({ savedRecipes = [], onRecipeClick, onRemoveSaved }: SavedPageProps) {
@@ -28,19 +30,15 @@ export function SavedPage({ savedRecipes = [], onRecipeClick, onRemoveSaved }: S
               <Card
                 key={recipe.id}
                 className="overflow-hidden hover:shadow-lg transition-all cursor-pointer"
-                onClick={() => onRecipeClick?.(recipe.id)}
+                onClick={() => onRecipeClick?.(recipe.recipe_id || recipe.id)}
               >
-                {/* 이미지 */}
-                <div className="aspect-video relative bg-muted">
-                  {recipe.image && (
-                    <ImageWithFallback
-                      src={recipe.image}
-                      alt={recipe.name}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
+                <div className="w-full h-40 relative bg-muted overflow-hidden">
+                  <ImageWithFallback
+                    src={recipe.image ?? ""}
+                    alt={recipe.name}
+                    className="w-full h-full object-cover"
+                  />
 
-                  {/* 삭제 버튼 */}
                   <div className="absolute top-2 right-2">
                     <Button
                       size="icon"
@@ -55,7 +53,6 @@ export function SavedPage({ savedRecipes = [], onRecipeClick, onRemoveSaved }: S
                     </Button>
                   </div>
 
-                  {/* 저장됨 배지 */}
                   <div className="absolute top-2 left-2">
                     <Badge className="bg-[#E07A5F] text-white">
                       <Bookmark className="w-3 h-3 mr-1 fill-current" />
@@ -64,39 +61,24 @@ export function SavedPage({ savedRecipes = [], onRecipeClick, onRemoveSaved }: S
                   </div>
                 </div>
 
-                {/* 카드 내용 */}
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <CardTitle>{recipe.name}</CardTitle>
-
-                    {/* 카테고리 */}
-                    <Badge variant="secondary">
-                      {recipe.category || "카테고리 없음"}
-                    </Badge>
+                    <Badge variant="secondary">{recipe.category ?? "기타"}</Badge>
                   </div>
 
-                  {/* cooking_method 대체 설명 */}
-                  <CardDescription className="text-xs mt-1">
-                    조리법: {recipe.cooking_method || "정보 없음"}
-                  </CardDescription>
+                  {/* RecipeListPage에는 description 없음 → 안전 처리 */}
+                  <CardDescription>{"설명이 없습니다."}</CardDescription>
                 </CardHeader>
 
                 <CardContent>
-                  <div className="flex flex-col gap-2 text-sm text-muted-foreground">
-                    {/* 해시태그 */}
-                    <div className="truncate">
-                      {recipe.hashtags
-                        ? `#${recipe.hashtags
-                            .split(",")
-                            .map((t) => t.trim())
-                            .join(" #")}`
-                        : "해시태그 없음"}
+                  <div className="flex gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {"시간 정보 없음"}
                     </div>
 
-                    {/* 재료 개수 */}
-                    <div className="text-primary font-semibold">
-                      재료 {recipe.ingredients_count}개
-                    </div>
+                    <div>📊 {"난이도 정보 없음"}</div>
                   </div>
                 </CardContent>
               </Card>

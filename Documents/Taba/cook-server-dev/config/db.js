@@ -16,7 +16,7 @@ const pool = mysql.createPool({
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   charset: 'utf8mb4',
-  timezone: '+00:00'
+  timezone: '+09:00'
 });
 
 // Test connection

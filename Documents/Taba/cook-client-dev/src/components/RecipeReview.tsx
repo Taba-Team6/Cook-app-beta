@@ -4,20 +4,21 @@ import { Card, CardContent } from "./ui/card";
 import { Textarea } from "./ui/textarea";
 import { Star, Upload, Home, Send, PartyPopper } from "lucide-react";
 import { motion } from "motion/react";
-import type { RecipeDetailData } from "../App";  
+//import type { RecipeDetailData } from "../App"; 
+ 
 
 interface Recipe {
   id: string;
   name: string;
   category: string;
-  difficulty: string;
-  cookingTime: number;
-  image: string;
-  description: string;
+  difficulty?: string | null;
+  cookingTime?: number | string | null;
+  image?: string | null;
+  description?: string | null;
 }
 
 interface RecipeReviewProps {
-  recipe: RecipeDetailData;  
+  recipe: Recipe;  
   onSubmit: () => void;
   onSkip: () => void;
 }
@@ -203,10 +204,10 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
         {/* 액션 버튼 */}
         <div className="space-y-3">
           <Button
+            variant="outline"
             size="lg"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="w-full bg-[#A5B68D] hover:bg-[#8fa072]"
+            onClick={onSkip}
+            className="w-full"
           >
             <Send className="w-5 h-5 mr-2" />
             후기 등록하기

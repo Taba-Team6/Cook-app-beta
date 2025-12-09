@@ -1,3 +1,7 @@
+-- ============================================
+-- CREATE VIEW USER_STATS (Migration Step 003)
+-- ============================================
+
 CREATE OR REPLACE VIEW user_stats AS
 SELECT 
     u.id,
