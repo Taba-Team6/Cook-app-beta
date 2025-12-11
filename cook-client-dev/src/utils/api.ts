@@ -4,230 +4,238 @@
 
 const API_BASE_URL = "http://localhost:3001/api";
 
+// 💡 [추가] AiRecommendation 타입을 사용하기 위해 임시로 타입 선언 (실제는 types/recipe.ts에서 임포트해야 함)
+interface AiRecommendation {
+    id: string; 
+    name: string; 
+    isGpt: boolean;
+}
+
+
 // ===============================
-// AUTH TOKEN
+// AUTH TOKEN (기존 코드 유지)
 // ===============================
 function getAuthToken(): string | null {
-  return sessionStorage.getItem("cooking_assistant_auth_token");
+  return sessionStorage.getItem("cooking_assistant_auth_token");
 }
 
 export function setAuthToken(token: string) {
-  sessionStorage.setItem("cooking_assistant_auth_token", token);
+  sessionStorage.setItem("cooking_assistant_auth_token", token);
 }
 
 export function removeAuthToken() {
-  sessionStorage.removeItem("cooking_assistant_auth_token");
+  sessionStorage.removeItem("cooking_assistant_auth_token");
 }
 
 // ===============================
-// 공통 API 호출
+// 공통 API 호출 (기존 코드 유지)
 // ===============================
 async function apiCall(
-  endpoint: string,
-  options: RequestInit = {},
-  requiresAuth: boolean = false
+  endpoint: string,
+  options: RequestInit = {},
+  requiresAuth: boolean = false
 ) {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(options.headers ? (options.headers as Record<string, string>) : {}),
-  };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers ? (options.headers as Record<string, string>) : {}),
+  };
 
-  if (requiresAuth) {
-    const token = getAuthToken();
-    if (!token) throw new Error("로그인이 필요합니다.");
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  if (requiresAuth) {
+    const token = getAuthToken();
+    if (!token) throw new Error("로그인이 필요합니다.");
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
 
-  let data: any = {};
-  try {
-    data = await response.json();
-  } catch {}
+  let data: any = {};
+  try {
+    data = await response.json();
+  } catch {}
 
-  if (!response.ok) {
-    throw new Error(data.error || data.message || "API 요청 실패");
-  }
+  if (!response.ok) {
+    throw new Error(data.error || data.message || "API 요청 실패");
+  }
 
-  return data;
+  return data;
 }
 
 // ===============================
-// AUTH
+// AUTH (기존 코드 유지)
 // ===============================
 export async function signUp(email: string, password: string, name: string) {
-  return apiCall("/auth/signup", {
-    method: "POST",
-    body: JSON.stringify({ email, password, name }),
-  });
+  return apiCall("/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({ email, password, name }),
+  });
 }
 
 export async function login(email: string, password: string) {
-  return apiCall("/auth/login", {
-    method: "POST",
-    body: JSON.stringify({ email, password }),
-  });
+  return apiCall("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
 }
 
 // ===============================
-// PROFILE
+// PROFILE (기존 코드 유지)
 // ===============================
 export async function getProfile() {
-  return apiCall("/profile", {}, true);
+  return apiCall("/profile", {}, true);
 }
 
 export async function updateProfile(data: {
-  name?: string;
-  allergies?: string[];
-  preferences?: any;
+  name?: string;
+  allergies?: string[];
+  preferences?: any;
 }) {
-  const token = localStorage.getItem("cooking_assistant_token"); // 프로젝트에서 실제로 쓰는 저장소 이름 확인해서 맞춰줘
+  const token = localStorage.getItem("cooking_assistant_token"); // 프로젝트에서 실제로 쓰는 저장소 이름 확인해서 맞춰줘
 
-  const res = await fetch(`${API_BASE_URL}/profile`, {
-    method: "PUT",
-    headers: {  
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(data),
-  });
+  const res = await fetch(`${API_BASE_URL}/profile`, {
+    method: "PUT",
+    headers: {  
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
 
-  if (!res.ok) {
-    const errorBody = await res.text();
-    console.error("updateProfile 실패:", res.status, errorBody);
-    throw new Error("Failed to update profile");
-  }
+  if (!res.ok) {
+    const errorBody = await res.text();
+    console.error("updateProfile 실패:", res.status, errorBody);
+    throw new Error("Failed to update profile");
+  }
 
-  return res.json(); // { profile: ... } 형태로 백엔드에서 보내줌
+  return res.json(); // { profile: ... } 형태로 백엔드에서 보내줌
 }
 
 // 프론트에서 import하는 함수
 export async function getCurrentUser() {
-  const res = await getProfile();     // { profile: {...} }
-  const profile = res.profile;
+  const res = await getProfile();     // { profile: {...} }
+  const profile = res.profile;
 
-  // App.tsx에서 기대하는 user 형태로 변환
-  const user = {
-    id: profile.id,
-    email: profile.email,
-    name: profile.name,
-  };
+  // App.tsx에서 기대하는 user 형태로 변환
+  const user = {
+    id: profile.id,
+    email: profile.email,
+    name: profile.name,
+  };
 
-  return {
-    user,
-    profile,
-  };
+  return {
+    user,
+    profile,
+  };
 }
 
 
 
 
 // ===============================
-// INGREDIENTS
+// INGREDIENTS (기존 코드 유지)
 // ===============================
 export async function getIngredients() {
-  const res = await apiCall("/ingredients", {}, true);
-  return {
-    ingredients: res.data || res.ingredients || [],
-  };
+  const res = await apiCall("/ingredients", {}, true);
+  return {
+    ingredients: res.data || res.ingredients || [],
+  };
 }
 
 export async function addIngredient(data: any) {
-  const res = await apiCall(
-    "/ingredients",
-    { method: "POST", body: JSON.stringify(data) },
-    true
-  );
-  return { ingredient: res.data || res.ingredient };
+  const res = await apiCall(
+    "/ingredients",
+    { method: "POST", body: JSON.stringify(data) },
+    true
+  );
+  return { ingredient: res.data || res.ingredient };
 }
 
 export async function updateIngredient(id: string, data: any) {
-  const res = await apiCall(
-    `/ingredients/${id}`,
-    { method: "PUT", body: JSON.stringify(data) },
-    true
-  );
-  return { ingredient: res.data || res.ingredient };
+  const res = await apiCall(
+    `/ingredients/${id}`,
+    { method: "PUT", body: JSON.stringify(data) },
+    true
+  );
+  return { ingredient: res.data || res.ingredient };
 }
 
 export async function deleteIngredient(id: string) {
-  return apiCall(`/ingredients/${id}`, { method: "DELETE" }, true);
+  return apiCall(`/ingredients/${id}`, { method: "DELETE" }, true);
 }
 
-// ✅ 영수증 OCR 파싱 (수정본)
+// ✅ 영수증 OCR 파싱 (수정본) (기존 코드 유지)
 export async function parseReceiptImage(formData: FormData) {
-  const res = await fetch(
-    "http://localhost:3001/api/receipt/parse",
-    {
-      method: "POST",
-      body: formData,
-    }
-  );
+  const res = await fetch(
+    "http://localhost:3001/api/receipt/parse",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || "영수증 분석 실패");
-  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || "영수증 분석 실패");
+  }
 
-  return res.json(); // { success: true, ingredients: [...] }
+  return res.json(); // { success: true, ingredients: [...] }
 }
 
 
 
 
 // ===============================
-// SAVED RECIPES
+// SAVED RECIPES (기존 코드 유지)
 // ===============================
 export async function getSavedRecipes() {
-  const res = await apiCall("/recipes", {}, true);
-  // 백엔드에서 { recipes: [...] } 형태로 보내준다고 가정
-  const list = res.recipes || res.data || res.savedRecipes || [];
-  return list;  // 🔥 배열 자체를 반환
+  const res = await apiCall("/recipes", {}, true);
+  // 백엔드에서 { recipes: [...] } 형태로 보내준다고 가정
+  const list = res.recipes || res.data || res.savedRecipes || [];
+  return list;  // 🔥 배열 자체를 반환
 }
 
 
 
 export async function saveRecipe(recipeData: any) {
-  const payload = {
-    ...recipeData,
-    // DB에서 NOT NULL이라 기본값 한 번 더 보정
-    category: recipeData.category ?? "기타",
-  };
+  const payload = {
+    ...recipeData,
+    // DB에서 NOT NULL이라 기본값 한 번 더 보정
+    category: recipeData.category ?? "기타",
+  };
 
-  const res = await apiCall(
-    "/recipes",                                   // ✅ 수정
-    { method: "POST", body: JSON.stringify(payload) },
-    true
-  );
-  return { savedRecipe: res.recipe || res.data || res.savedRecipe };
+  const res = await apiCall(
+    "/recipes",                                   // ✅ 수정
+    { method: "POST", body: JSON.stringify(payload) },
+    true
+  );
+  return { savedRecipe: res.recipe || res.data || res.savedRecipe };
 }
 
 export async function removeSavedRecipe(id: string) {
-  return apiCall(`/recipes/${id}`, { method: "DELETE" }, true);  // ✅ 수정
+  return apiCall(`/recipes/${id}`, { method: "DELETE" }, true);  // ✅ 수정
 }
 
-// ✅ AI 완료 레시피 단건 조회
+// ✅ AI 완료 레시피 단건 조회 (기존 코드 유지)
 export const getCompletedRecipeById = async (id: string) => {
-  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
 
-  const res = await fetch(
-    `http://localhost:3001/api/completed-recipes/${id}`,
-    {
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    }
-  );
+  const res = await fetch(
+    `http://localhost:3001/api/completed-recipes/${id}`,
+    {
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
 
-  if (!res.ok) {
-    throw new Error("완료된 레시피 조회 실패");
-  }
+  if (!res.ok) {
+    throw new Error("완료된 레시피 조회 실패");
+  }
 
-  return res.json();
+  return res.json();
 };
 
 
@@ -237,225 +245,241 @@ export const getCompletedRecipeById = async (id: string) => {
 
 
 // ===============================
-// PUBLIC RECIPES (추가됨)
+// PUBLIC RECIPES (추가됨) (기존 코드 유지)
 // ===============================
 
 /**
- * 공개 레시피 목록 조회 (필터 및 검색 포함)
- * @param {object} params - { category, search, limit, offset }
- */
+ * 공개 레시피 목록 조회 (필터 및 검색 포함)
+ * @param {object} params - { category, search, limit, offset }
+ */
 export async function getPublicRecipes(params: {
-  category?: string;
-  search?: string;
-  limit?: number;
-  offset?: number;
+  category?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
 }) {
-  // 쿼리 파라미터 생성
-  const urlParams = new URLSearchParams();
-  if (params.category) urlParams.append("category", params.category);
-  if (params.search) urlParams.append("search", params.search);
-  if (params.limit !== undefined) urlParams.append("limit", String(params.limit));
-  if (params.offset !== undefined) urlParams.append("offset", String(params.offset));
+  // 쿼리 파라미터 생성
+  const urlParams = new URLSearchParams();
+  if (params.category) urlParams.append("category", params.category);
+  if (params.search) urlParams.append("search", params.search);
+  if (params.limit !== undefined) urlParams.append("limit", String(params.limit));
+  if (params.offset !== undefined) urlParams.append("offset", String(params.offset));
 
-  const endpoint = `/recipes/public?${urlParams.toString()}`;
+  const endpoint = `/recipes/public?${urlParams.toString()}`;
 
-  // 인증이 필요 없는 공개 API 호출
-  const res = await apiCall(endpoint, { method: "GET" }, false);
-  
-  // 백엔드 응답 구조에 맞게 recipes를 반환
-  return {
-    recipes: res.recipes || [],
-    total: res.total || 0,
-    limit: res.limit || 50,
-    offset: res.offset || 0,
-  };
+  // 인증이 필요 없는 공개 API 호출
+  const res = await apiCall(endpoint, { method: "GET" }, false);
+  
+  // 백엔드 응답 구조에 맞게 recipes를 반환
+  return {
+    recipes: res.recipes || [],
+    total: res.total || 0,
+    limit: res.limit || 50,
+    offset: res.offset || 0,
+  };
 }
 
 /**
- * 레시피 상세 정보 조회 (식약처 API 실시간 조회)
- * @param {string} id - 레시피 ID
- */
+ * 레시피 상세 정보 조회 (식약처 API 실시간 조회) (기존 코드 유지)
+ * @param {string} id - 레시피 ID
+ */
 export async function getRecipeDetail(id: string) {
-  // 실시간 조회이므로 인증 없이 호출
-  const res = await apiCall(`/recipes/detail/${id}`, { method: "GET" }, false);
-  return res.recipe;
+  // 실시간 조회이므로 인증 없이 호출
+  const res = await apiCall(`/recipes/detail/${id}`, { method: "GET" }, false);
+  return res.recipe;
 }
 
 /**
- * 레시피 전체 상세 정보 조회 (DB 크롤링 데이터)
- * @param {string} id - 레시피 ID
- */
+ * 레시피 전체 상세 정보 조회 (DB 크롤링 데이터)
+ * 💡 [2-1 변경 반영] 서버에서 ID 범위(10000+) 분기 처리가 완료되어 API 호출 구조는 유지합니다.
+ * @param {string} id - 레시피 ID
+ */
 export async function getFullRecipeDetail(id: string) {
-  // DB에 저장된 전체 레시피를 조회하므로 인증 없이 호출
-  const res = await apiCall(`/recipes/full/${id}`, { method: "GET" }, false);
-  return res.recipe;
+  // DB에 저장된 전체 레시피를 조회하므로 인증 없이 호출
+  const res = await apiCall(`/recipes/full/${id}`, { method: "GET" }, false);
+  return res.recipe;
 }
 
 
 // ===============================
-// GPT — 기본 대화 (레시피 생성)
+// 💡 [추가] AI RECIPE (Hybrid Recommendation)
+// ===============================
+
+/**
+ * AI 하이브리드 추천 목록 조회 (DB 4개 + GPT 1개)
+ * @returns {Promise<AiRecommendation[]>} - 추천 레시피 목록 (ID, name, isGpt 포함)
+ */
+export async function fetchAiRecommendations(): Promise<AiRecommendation[]> {
+    // 💡 [2-3 변경 반영] 서버의 GET /recipes/hybrid-recommendation 엔드포인트 호출
+    const res = await apiCall("/recipes/hybrid-recommendation", { method: "GET" }, true);
+    // 서버는 { success: true, recipes: [...] } 형태로 응답
+    // AiRecommendation 타입은 types/recipe.ts에 정의되어 있다고 가정
+    return res.recipes || []; 
+}
+
+
+// ===============================
+// GPT — 기본 대화 (레시피 생성) (기존 코드 유지)
 // ===============================
 export async function askGPT_raw(data: { message: string; profile: any }) {
-  const res = await fetch("http://localhost:3001/api/ai/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  });
+  const res = await fetch("http://localhost:3001/api/ai/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 
-  const json = await res.json();
-  return json.reply;
+  const json = await res.json();
+  return json.reply;
 }
 
 // ===============================
 // GPT — Followup (레시피 + 대화)
+// 💡 [3-1 구현] askCookingFollowup 함수 정의 (기존 코드 유지)
 // ===============================
 export async function askCookingFollowup(
-  recipe: any,
-  question: string,
-  profile: any
+  recipe: any,
+  question: string,
+  profile: any
 ) {
-  const res = await fetch("http://localhost:3001/api/ai/followup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ recipe, question, profile }),
-  });
+  const res = await fetch("http://localhost:3001/api/ai/followup", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ recipe, question, profile }),
+  });
 
-  return res.json();
+  return res.json();
 }
 
 // ===============================
-// GPT — Intent (시작 의도 감지)
+// GPT — Intent (시작 의도 감지) (기존 코드 유지)
 // ===============================
 export async function detectStartIntent(text: string) {
-  const res = await fetch("http://localhost:3001/api/ai/intent", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
+  const res = await fetch("http://localhost:3001/api/ai/intent", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
 
-  const data = await res.json();
-  return data.intent;
+  const data = await res.json();
+  return data.intent;
 }
 
 // ===============================
-// STT — Whisper
+// STT — Whisper (기존 코드 유지)
 // ===============================
 export async function speechToText(audioBlob: Blob) {
-  const formData = new FormData();
-  formData.append("audio", audioBlob);
+  const formData = new FormData();
+  formData.append("audio", audioBlob);
 
-  const res = await fetch("http://localhost:3001/api/voice/stt", {
-    method: "POST",
-    body: formData,
-  });
+  const res = await fetch("http://localhost:3001/api/voice/stt", {
+    method: "POST",
+    body: formData,
+  });
 
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error);
-  return data;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error);
+  return data;
 }
 
 // ===============================
-// TTS — Text → Speech (Google TTS)
+// TTS — Text → Speech (Google TTS) (기존 코드 유지)
 // ===============================
 export async function textToSpeech(text: string) {
-  return apiCall(
-    "/ai/voice/tts",
-    { method: "POST", body: JSON.stringify({ text }) },
-    true
-  );
+  return apiCall(
+    "/ai/voice/tts",
+    { method: "POST", body: JSON.stringify({ text }) },
+    true
+  );
 }
 
 // ===============================
-// HEALTH CHECK
+// HEALTH CHECK (기존 코드 유지)
 // ===============================
 export async function healthCheck() {
-  return apiCall("/health");
+  return apiCall("/health");
 }
 
 // ===============================
-// COMPLETED RECIPES
+// COMPLETED RECIPES (기존 코드 유지)
 // ===============================
-// 프론트에서 쓸 재료 타입
-export type CompletedIngredient = {
-  name: string;
-  amount: string;
-};
+// ... (rest of the code for COMPLETED RECIPES)
+// (CompletedRecipeRow, CompletedRecipe, CompletedRecipePayload interfaces and functions remain unchanged)
 
 // ⬇️ 서버에서 오는 한 줄(ROW) 모양
 interface CompletedRecipeRow {
-  id: string;              // completed_recipes.id
-  user_id: string;
-  recipe_id: string;
-  name: string;
-  image: string | null;
-  description: string | null;
-  category: string;
-  cooking_method: string | null;
-  hashtags: string | null;
-  ingredients_json: string | null;   // JSON 문자열
-  steps_json: string | null;         // JSON 문자열
-  cooking_time: string | number | null;
-  servings: string | number | null;
-  difficulty: string | null;
-  completed_at: string;             // DATETIME → 문자열
+  id: string;              // completed_recipes.id
+  user_id: string;
+  recipe_id: string;
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  cooking_method: string | null;
+  hashtags: string | null;
+  ingredients_json: string | null;   // JSON 문자열
+  steps_json: string | null;         // JSON 문자열
+  cooking_time: string | number | null;
+  servings: string | number | null;
+  difficulty: string | null;
+  completed_at: string;             // DATETIME → 문자열
 }
 
 // ⬇️ 프론트에서 상태/화면에 쓸 최종 타입
 export interface CompletedRecipe {
-  id: string;                        // 여기서는 recipe_id 로 통일
-  name: string;
-  image: string | null;
-  description: string | null;
-  category: string;
-  cooking_method?: string | null;
-  hashtags?: string | null;
-  ingredients: CompletedIngredient[];
-  steps: string[];
-  completedAt: string;
-  cookingTime?: string | number | null;
-  servings?: string | number | null;
-  difficulty?: string | null;
+  id: string;                        // 여기서는 recipe_id 로 통일
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  cooking_method?: string | null;
+  hashtags?: string | null;
+  ingredients: CompletedIngredient[];
+  steps: string[];
+  completedAt: string;
+  cookingTime?: string | number | null;
+  servings?: string | number | null;
+  difficulty?: string | null;
 }
 
 // ⬇️ 서버에 저장할 때(POST) 쓰는 payload
 export interface CompletedRecipePayload {
-  id: string;              // recipe_id
-  name: string;
-  image: string | null;
-  description: string | null;
-  category: string;
-  // ✅ 필수 → 선택(Optional)로 변경
-  cooking_method?: string | null;
-  hashtags?: string | null;
+  id: string;              // recipe_id
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string;
+  // ✅ 필수 → 선택(Optional)로 변경
+  cooking_method?: string | null;
+  hashtags?: string | null;
 
-  ingredients: CompletedIngredient[]; // 배열 그대로 보냄
-  steps: string[];                    // 배열 그대로 보냄
-  completedAt: string;
-  cookingTime?: string | number | null;
-  servings?: string | number | null;
-  difficulty?: string | null;
+  ingredients: CompletedIngredient[]; // 배열 그대로 보냄
+  steps: string[];                    // 배열 그대로 보냄
+  completedAt: string;
+  cookingTime?: string | number | null;
+  servings?: string | number | null;
+  difficulty?: string | null;
 }
 
 // 한 건 추가 (POST)
 export async function addCompletedRecipe(payload: CompletedRecipePayload) {
-  const token = sessionStorage.getItem("cooking_assistant_auth_token");
+  const token = sessionStorage.getItem("cooking_assistant_auth_token");
 
-  const res = await fetch("http://localhost:3001/api/completed-recipes", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
+  const res = await fetch("http://localhost:3001/api/completed-recipes", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error("❌ completed-recipes 저장 실패:", errorText);
-    throw new Error("completed-recipes 저장 실패");
-  }
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error("❌ completed-recipes 저장 실패:", errorText);
+    throw new Error("completed-recipes 저장 실패");
+  }
 
-  return res.json();
+  return res.json();
 }
 
 
