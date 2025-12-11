@@ -18,6 +18,28 @@ import { Input } from "./ui/input";
 import { getSavedRecipes, saveRecipe,removeSavedRecipe } from "../utils/api";
 import { getCompletedRecipeById } from "../utils/api";
 
+function HideOnErrorImage({
+  src,
+  alt,
+  className,
+  ...rest
+}: React.ImgHTMLAttributes<HTMLImageElement>) {
+  const [error, setError] = useState(false);
+
+  // src가 없거나 에러 발생하면 아무것도 렌더링하지 않음
+  if (!src || error) return null;
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setError(true)}
+      {...rest}
+    />
+  );
+}
+
 
 // =======================
 // 타입 정의 (DB 기준)
@@ -443,11 +465,12 @@ const handleSaveRecipe = async (review: CommunityReview) => {
                 </div>
 
                 {displayImage && (
-                  <ImageWithFallback
-                    src={displayImage}
-                    className="w-full h-72 object-cover"
-                    alt="review"
-                  />
+                  <HideOnErrorImage
+  src={displayImage}
+  alt="review"
+  className="w-full h-72 object-cover"
+/>
+
                 )}
 
 

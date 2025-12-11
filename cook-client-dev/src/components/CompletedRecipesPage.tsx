@@ -116,6 +116,7 @@ export function CompletedRecipesPage({
                       />
                     </div>
 
+
                     {/* ✅ RIGHT CARD CONTENT (디자인 유지) */}
                     <div className="flex-1">
                       <CardHeader className="pb-2">

@@ -65,7 +65,7 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
           recipeName: recipe.name,
           rating,
           review: review.trim() === "" ? "맛있게 먹었습니다!" : review,
-          imageUrl: uploadedImage,
+          imageUrl: uploadedImage ?? recipe.image ?? null,
           userName: user.name,
           userInitial: user.name[0],
         }),
