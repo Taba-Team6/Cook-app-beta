@@ -52,6 +52,32 @@ function normalizeText(raw: string): string {
     .replace(/\s+/g, " ")
     .trim();
 }
+//여기수정
+// ===============================
+// 🔊 타이머 종료 효과음
+// ===============================
+function playTimerSound() {
+  const audio = new Audio("/sounds/timer-end.mp3");
+  audio.volume = 1.0;
+  audio.play().catch(() => {});
+}
+
+//여기수정
+// ===============================
+// 🔥 Step 내의 "1분 30초", "30초" 등 시간 자동 감지
+// ===============================
+function extractSecondsFromText(stepText: string): number | null {
+  const minuteMatch = stepText.match(/(\d+)\s*분/);
+  const secondMatch = stepText.match(/(\d+)\s*초/);
+
+  let total = 0;
+
+  if (minuteMatch) total += parseInt(minuteMatch[1], 10) * 60;
+  if (secondMatch) total += parseInt(secondMatch[1], 10);
+
+  return total > 0 ? total : null;
+}
+
 
 // ===============================
 // Component
@@ -65,7 +91,7 @@ export function VoiceAssistant({
   initialRecipeContext,
 }: VoiceAssistantProps) {
   // ====== 상태 ======
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [textInput, setTextInput] = useState("");
@@ -74,6 +100,18 @@ export function VoiceAssistant({
   const [recipeInfo, setRecipeInfo] = useState<Recipe | null>(
     initialRecipe ?? null
   );
+  //여기 수정 88까지
+  // 🟦 재료 부족 → 대체재 선택 흐름 관리용 상태
+  const [replacementMode, setReplacementMode] = useState<{
+    missing: string | null;
+    options: string[] | null;
+  } | null>(null);
+
+  // 🟦 "어떤 재료로 대체할까요?" 라고 이미 물어본 상태인지
+  const [awaitingReplacementChoice, setAwaitingReplacementChoice] =
+    useState(false);
+
+
   const [ingredientsChecked, setIngredientsChecked] = useState(false);
   const [cookingStarted, setCookingStarted] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -82,6 +120,15 @@ export function VoiceAssistant({
   const [isFinished, setIsFinished] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+  //여기 수정
+  // ===============================
+  // 🔥 타이머 상태
+  // ===============================
+  const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const timerRef = useRef<any>(null);
+  //이거 추가
+  const [originalTimerSeconds, setOriginalTimerSeconds] = useState<number | null>(null);
 
   // 🔥 단계 관련 최신 상태를 들고 있을 ref들
   const ingredientsCheckedRef = useRef(ingredientsChecked);
@@ -99,10 +146,6 @@ export function VoiceAssistant({
 
   // ❗ 치명적인 에러(not-allowed) 발생 시 자동 재시작 막기 위한 플래그
   const hardErrorRef = useRef(false);
-
-  console.log("✅ recipeInfo:", recipeInfo);
-  console.log("✅ isFinished:", isFinished);
-
 
   // keep wake active ref synced
   useEffect(() => {
@@ -347,19 +390,155 @@ useEffect(() => {
     return `${base}${guide}`;
   };
 
+  //여기 수정
+  // ===============================
+  // 🔥 단계 시작 시 시간 감지 → 타이머 실행
+  // ===============================
+  const handleStepStart = (stepText: string) => {
+    const sec = extractSecondsFromText(stepText);
+    if (sec) {
+      addMessage(` ${sec}초 타이머를 시작할게요!`, "assistant");
+      startTimer(sec);
+    } else {
+      stopTimer();
+    }
+  };
+
+  //여기 수정
+  // ===============================
+  // 🔥 타이머 시작 / 정지 기능
+  // ===============================
+  const startTimer = (sec: number) => {
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    setOriginalTimerSeconds(sec); 
+    setTimerSeconds(sec);
+    setTimerRunning(true);
+
+    timerRef.current = setInterval(() => {
+      setTimerSeconds((prev) => {
+        if (prev === null) return null;
+
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+          setTimerRunning(false);
+
+          playTimerSound();   // 🔥 효과음 재생
+
+          addMessage(` ${sec}초가 지났어요! 다음 단계로 넘어가볼까요?`, "assistant");
+          return 0;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = null;
+    setTimerRunning(false);
+    setTimerSeconds(null);
+    setOriginalTimerSeconds(null); 
+  };
+
+  //여기 수정 427까지
   // ===============================
   // 🔥 핵심: 음성 입력도 텍스트 입력과 100% 동일 처리
   // ===============================
-  async function handleUserInput(rawText: string) {
-    const text = normalizeText(rawText);
-    if (!text) return;
+    async function handleUserInput(rawText: string) {
+      const text = normalizeText(rawText);
+      if (!text) return;
 
-    // 🔥 항상 ref에 들어있는 "최신 상태"를 기준으로 처리
-    const ingredientsChecked = ingredientsCheckedRef.current;
-    const cookingStarted = cookingStartedRef.current;
-    const currentStepIndex = currentStepIndexRef.current;
-    const recipeInfoLocal = recipeInfoRef.current;
-    const completedSteps = completedStepsRef.current;
+      addMessage(text, "user");
+
+      // 🟦 0단계: 이미 "어떤 재료로 대체할까요?" 단계라면 여기서 먼저 처리
+      if (awaitingReplacementChoice && replacementMode && recipeInfoRef.current) {
+        const user = text; // "1번", "2", "쪽파로 대체", 이런 것들
+
+        let selected: string | null = null;
+
+        // 1) 번호로 고른 경우 ("1", "1번")
+        const numMatch = user.match(/\d+/);
+        if (numMatch && replacementMode.options) {
+          const idx = parseInt(numMatch[0], 10) - 1;
+          if (
+            !Number.isNaN(idx) &&
+            idx >= 0 &&
+            idx < replacementMode.options.length
+          ) {
+            selected = replacementMode.options[idx];
+          }
+        }
+
+        // 2) 재료 이름으로 고른 경우 ("쪽파", "부추로 대체", 등)
+        if (!selected && replacementMode.options) {
+          selected =
+            replacementMode.options.find((opt) => user.includes(opt)) ?? null;
+        }
+
+        if (selected) {
+          // 선택 완료 → 상태 초기화
+          setAwaitingReplacementChoice(false);
+          setReplacementMode(null);
+
+          // GPT에게 "대파를 쪽파로 대체해줘" 같은 식으로 정확히 전달
+          const followupText = `${replacementMode.missing ?? ""}를 ${selected}로 대체해줘`;
+
+          try {
+            const result: FollowupResult = await askCookingFollowup(
+              recipeInfoRef.current,
+              followupText,
+              userProfile
+            );
+
+            setRecipeInfo(result.recipe);
+
+            // 1) assistantMessage 정리 → 불필요한 "요리를 바로 시작할까요?" 제거
+            let cleanAssistantMsg = (result.assistantMessage ?? "")
+              .replace(/요리를 바로 시작할까요[^\n]*/g, "") // 해당 문장 전체 제거
+              .trim();
+
+            // 2) 메시지 합치기
+            let merged = cleanAssistantMsg + "\n\n";
+
+            // 3) 재료 목록 추가
+            if (result.recipe.fullIngredients && result.recipe.recipeName) {
+              const ingredList = result.recipe.fullIngredients.join("\n");
+              merged += `${result.recipe.recipeName} 재료 목록입니다:\n${ingredList}\n\n빠진 재료가 있으면 말해주세요!\n\n`;
+            }
+
+            // 4) 마지막 질문은 여기서만 한 번만!
+            merged += `요리를 바로 시작할까요?`;
+
+            // 5) 최종 출력
+            addMessage(merged, "assistant");
+
+
+
+          } catch {
+            addMessage("대체 재료로 레시피를 업데이트하지 못했어요.", "assistant");
+          }
+
+          return; // ✅ 여기서 끝! 아래 일반 로직으로 내려가지 않음
+        }
+
+        // 번호/이름도 못 알아들었을 때
+        addMessage(
+          `알아듣기 어려워요.\n사용하실 번호나 재료명을 다시 알려주세요.\n예: "1번", "쪽파로 대체해줘"`,
+          "assistant"
+        );
+        return;
+      }
+
+      // 🔥 항상 ref에 들어있는 "최신 상태"를 기준으로 처리
+      const ingredientsChecked = ingredientsCheckedRef.current;
+      const cookingStarted = cookingStartedRef.current;
+      const currentStepIndex = currentStepIndexRef.current;
+      const recipeInfoLocal = recipeInfoRef.current;
+      const completedSteps = completedStepsRef.current;
+
 
     console.log(
       "%c[VOICE DEBUG] ===== 사용자 입력 처리 시작 =====",
@@ -373,7 +552,7 @@ useEffect(() => {
     console.log("[VOICE DEBUG] recipeInfo:", recipeInfoLocal);
     console.log("[VOICE DEBUG] ======================================");
 
-    addMessage(text, "user");
+    //addMessage(text, "user");
 
     // ===== 1) 처음 레시피 생성 =====
     if (!recipeInfoLocal) {
@@ -427,6 +606,8 @@ useEffect(() => {
           buildStepMessage(next, nowRecipe.steps || []),
           "assistant"
         );
+        // 🔥🔥🔥 여기!!! 타이머 실행 여기 수정
+        handleStepStart(nowRecipe.steps[next]);
       } else {
         setIsFinished(true);
         addMessage(
@@ -436,11 +617,17 @@ useEffect(() => {
       }
       return;
     }
+
+    //이 단락 수정
     // ===== 2) 재료 체크 단계 =====
     if (!ingredientsChecked) {
       const readyKeywords = ["다 있어", "다있어", "재료 다 있어", "재료다있어"];
       if (readyKeywords.some((k) => text.includes(k))) {
         setIngredientsChecked(true);
+        setCookingStarted(false);
+        setCurrentStepIndex(0);
+        setReplacementMode(null);
+        setAwaitingReplacementChoice(false);
         addMessage("모든 재료가 준비되었군요! 요리를 시작할까요?", "assistant");
         return;
       }
@@ -449,7 +636,34 @@ useEffect(() => {
         setIngredientsChecked(true);
         setCookingStarted(true);
         setCurrentStepIndex(0);
+        setReplacementMode(null);
+        setAwaitingReplacementChoice(false);
         addMessage(buildStepMessage(0, nowRecipe.steps || []), "assistant");
+        // 🔥🔥🔥 요기!!! 타이머 실행 여기 수정
+        handleStepStart(nowRecipe.steps[0]);
+        return;
+      }
+
+      // 🟦 사용자가 "대체재로 바꾸기(1번)"를 선택한 경우 → 여기서 직접 처리
+      if (
+        !awaitingReplacementChoice &&     // ←←← 이 조건을 꼭 추가해라!!!
+        replacementMode &&
+        ["1", "1번", "1번으로 할게", "대체재로 바꿀래", "대체재로 바꾸기"].some(
+          (k) => text.includes(k)
+        )
+      ) {
+        // 이제 실제 대체재(쪽파/부추/샐러리) 중 하나를 고르는 단계로 진입
+        setAwaitingReplacementChoice(true);
+
+        const opts = replacementMode.options ?? [];
+        const optsText = opts
+          .map((opt, idx) => `${idx + 1}) ${opt}`)
+          .join("\n");
+
+        addMessage(
+          `어떤 재료로 대체할까요?\n${optsText}\n\n사용하실 대체재 번호나 재료명을 말씀해 주세요.\n(예: "1번", "쪽파로 대체해줘")`,
+          "assistant"
+        );
         return;
       }
 
@@ -461,11 +675,44 @@ useEffect(() => {
         );
         setRecipeInfo(result.recipe);
         addMessage(result.assistantMessage, "assistant");
+
+        // 🟦 여기서 GPT 답변 안에서 "대체재 목록"을 파싱해서 저장
+        // 예시 메시지:
+        // 대파가 없으시군요!
+        // 다음과 같은 재료로 대체할 수 있습니다:
+        //
+        // - 쪽파
+        // - 부추
+        // - 샐러리
+        //
+        // 1) 대체재료로 바꾸기
+        // 2) 해당 재료 없이 만들기
+        const lines = result.assistantMessage.split("\n");
+        const bulletLines = lines.filter((line) =>
+          line.trim().startsWith("-")
+        );
+
+        if (bulletLines.length > 0) {
+          const options = bulletLines.map((line) =>
+            line.replace(/^[-•]\s*/, "").trim()
+          );
+
+          // 사용자가 말한 "대파 없어", "양파 없는데" 등에서 재료명만 대충 추출
+          const missing = text
+            .replace(/없어|없는데|없음|없다|이 없어|가 없어/g, "")
+            .trim();
+
+          setReplacementMode({
+            missing: missing || null,
+            options,
+          });
+        }
       } catch {
         addMessage("빠진 재료가 있을까요?", "assistant");
       }
       return;
     }
+
 
     // ===== 3) 요리 시작 전 =====
     if (!cookingStarted) {
@@ -918,6 +1165,42 @@ useEffect(() => {
                     <Progress value={progressValue} className="h-2" />
                   </div>
                 )}
+
+                  {/*이거추가 */}
+                 {/* 🔥 타이머 UI — 카드 내부에 넣는다면 여기! */}
+                  {timerRunning && originalTimerSeconds && (
+                    <div className="mt-4 p-4 rounded-xl bg-primary/10 border border-primary/20">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex items-center gap-2 text-primary font-semibold">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="w-5 h-5"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                          </svg>
+
+                          <span>{timerSeconds}초 남음</span>
+                        </div>
+
+                      </div>
+
+                      <Progress
+                        value={
+                          ((originalTimerSeconds - (timerSeconds ?? 0)) /
+                            originalTimerSeconds) *
+                          100
+                        }
+                        className="h-2 bg-primary/20"
+                      />
+                    </div>
+                  )}
               </div>
 
               {/* 웨이크워드 버튼 */}
@@ -952,6 +1235,8 @@ useEffect(() => {
             </div>
           </CardContent>
         </Card>
+
+        
 
         {/* 채팅 영역 */}
         <Card className="rounded-2xl border bg-muted/40">
@@ -1037,17 +1322,14 @@ useEffect(() => {
             </div>
           )}
 
-
           <Button
             className="w-full mt-1"
             size="lg"
-            onClick={() => onCookingComplete?.(recipeInfo as any)}
+            onClick={handleCompleteCooking}
             disabled={!recipeInfo || !isFinished}
           >
             요리 완료
           </Button>
-
-          
 
           {!isFinished && recipeInfo && (
             <p className="text-[11px] text-muted-foreground text-center">

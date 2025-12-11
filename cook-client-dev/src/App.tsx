@@ -941,9 +941,12 @@ const handleCompletedRecipeClick = (recipe: CompletedRecipe) => {
               }
             />
 
-            {/* ⭐ 온보딩 가이드 */}
-            {showOnboarding && (
-              <OnboardingGuide onFinish={handleOnboardingFinish} />
+             {/* ⭐ 온보딩 가이드 (로그인 후 홈에서만, 한 번만) */}
+              {showOnboarding && (
+                <OnboardingGuide
+                  onComplete={handleOnboardingFinish}
+                  onSkip={handleOnboardingFinish}
+                />
             )}
           </>
         )}

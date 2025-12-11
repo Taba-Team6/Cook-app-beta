@@ -311,11 +311,19 @@ const handleSaveRecipe = async (review: CommunityReview) => {
   };
 
   const filteredReviews = [...reviews].sort((a, b) => {
+    // 🔹 인기순
     if (filter === "popular") {
       return (b.bookmark_count ?? 0) - (a.bookmark_count ?? 0);
     }
-    return 0; // 전체는 서버 기본 순서 유지
+
+    // 🔹 전체: 최신순(created_at 내림차순)
+    if (filter === "all") {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+
+    return 0;
   });
+
 
 
   const rankings = calculateRankings();
