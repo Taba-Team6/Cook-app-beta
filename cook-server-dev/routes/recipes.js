@@ -1,3 +1,5 @@
+// cook-server-dev/routes/recipes.js
+
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../config/db.js';
@@ -450,338 +452,335 @@ router.use(authenticateToken);
 // Get All Saved Recipes (기존 코드 유지)
 // ============================================
 router.get('/', async (req, res) => {
-  try {
-    const recipes = await query(
-      `SELECT id, user_id, recipe_id, name, category, difficulty, cooking_time, 
-              image, description, ingredients, steps, saved_at 
-       FROM saved_recipes 
-       WHERE user_id = ? 
-       ORDER BY saved_at DESC`,
-      [req.user.id]
-    );
+  try {
+    const recipes = await query(
+      `SELECT id, user_id, recipe_id, name, category, difficulty, cooking_time, 
+              image, description, ingredients, steps, saved_at 
+       FROM saved_recipes 
+       WHERE user_id = ? 
+       ORDER BY saved_at DESC`,
+      [req.user.id]
+    );
 
-    // Parse JSON fields
-    recipes.forEach(recipe => {
-      if (recipe.ingredients && typeof recipe.ingredients === 'string') {
-        recipe.ingredients = JSON.parse(recipe.ingredients);
-      }
-      if (recipe.steps && typeof recipe.steps === 'string') {
-        recipe.steps = JSON.parse(recipe.steps);
-      }
-    });
+    // Parse JSON fields
+    recipes.forEach(recipe => {
+      if (recipe.ingredients && typeof recipe.ingredients === 'string') {
+        recipe.ingredients = JSON.parse(recipe.ingredients);
+      }
+      if (recipe.steps && typeof recipe.steps === 'string') {
+        recipe.steps = JSON.parse(recipe.steps);
+      }
+    });
 
-    res.json({ recipes });
+    res.json({ recipes });
 
-  } catch (error) {
-    console.error('Get saved recipes error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to fetch saved recipes'
-    });
-  }
+  } catch (error) {
+    console.error('Get saved recipes error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to fetch saved recipes'
+    });
+  }
 });
 
 // ============================================
 // Save Recipe (기존 코드 유지)
 // ============================================
 router.post('/', async (req, res) => {
-  try {
-    const { 
-      recipe_id, 
-      name, 
-      category, 
-      difficulty, 
-      cooking_time, 
-      image, 
-      description, 
-      ingredients, 
-      steps 
-    } = req.body;
+  try {
+    const { 
+      recipe_id, 
+      name, 
+      category, 
+      difficulty, 
+      cooking_time, 
+      image, 
+      description, 
+      ingredients, 
+      steps 
+    } = req.body;
 
-    // Validation
-    if (!recipe_id || !name) {
-      return res.status(400).json({
-        error: 'Validation error',
-        message: 'Recipe ID and name are required'
-      });
-    }
+    // Validation
+    if (!recipe_id || !name) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'Recipe ID and name are required'
+      });
+    }
 
-    // Check if already saved
-    const existing = await query(
-      'SELECT id FROM saved_recipes WHERE user_id = ? AND recipe_id = ?',
-      [req.user.id, recipe_id]
-    );
+    // Check if already saved
+    const existing = await query(
+      'SELECT id FROM saved_recipes WHERE user_id = ? AND recipe_id = ?',
+      [req.user.id, recipe_id]
+    );
 
-    if (existing.length > 0) {
-      return res.status(400).json({
-        error: 'Recipe already saved',
-        message: 'This recipe is already in your saved list'
-      });
-    }
+    if (existing.length > 0) {
+      return res.status(400).json({
+        error: 'Recipe already saved',
+        message: 'This recipe is already in your saved list'
+      });
+    }
 
-    const id = uuidv4();
+    const id = uuidv4();
 
-    await query(
-      `INSERT INTO saved_recipes 
-       (id, user_id, recipe_id, name, category, difficulty, cooking_time, image, description, ingredients, steps) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        req.user.id,
-        recipe_id,
-        name,
-        category || null,
-        difficulty || null,
-        cooking_time || null,
-        image || null,
-        description || null,
-        ingredients ? JSON.stringify(ingredients) : null,
-        steps ? JSON.stringify(steps) : null
-      ]
-    );
+    await query(
+      `INSERT INTO saved_recipes 
+       (id, user_id, recipe_id, name, category, difficulty, cooking_time, image, description, ingredients, steps) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        req.user.id,
+        recipe_id,
+        name,
+        category || null,
+        difficulty || null,
+        cooking_time || null,
+        image || null,
+        description || null,
+        ingredients ? JSON.stringify(ingredients) : null,
+        steps ? JSON.stringify(steps) : null
+      ]
+    );
 
-    // Fetch saved recipe
-    const recipes = await query(
-      'SELECT * FROM saved_recipes WHERE id = ?',
-      [id]
-    );
+    // Fetch saved recipe
+    const recipes = await query(
+      'SELECT * FROM saved_recipes WHERE id = ?',
+      [id]
+    );
 
-    const recipe = recipes[0];
-    
-    // Parse JSON fields
-    if (recipe.ingredients && typeof recipe.ingredients === 'string') {
-      recipe.ingredients = JSON.parse(recipe.ingredients);
-    }
-    if (recipe.steps && typeof recipe.steps === 'string') {
-      recipe.steps = JSON.parse(recipe.steps);
-    }
+    const recipe = recipes[0];
+    
+    // Parse JSON fields
+    if (recipe.ingredients && typeof recipe.ingredients === 'string') {
+      recipe.ingredients = JSON.parse(recipe.ingredients);
+    }
+    if (recipe.steps && typeof recipe.steps === 'string') {
+      recipe.steps = JSON.parse(recipe.steps);
+    }
 
-    res.status(201).json({
-      success: true,
-      recipe
-    });
+    res.status(201).json({
+      success: true,
+      recipe
+    });
 
-  } catch (error) {
-    console.error('Save recipe error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to save recipe'
-    });
-  }
+  } catch (error) {
+    console.error('Save recipe error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to save recipe'
+    });
+  }
 });
 
 // ============================================
 // Remove Saved Recipe (기존 코드 유지)
 // ============================================
 router.delete('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-    const result = await query(
-      'DELETE FROM saved_recipes WHERE (id = ? OR recipe_id = ?) AND user_id = ?',
-      [id, id, req.user.id]
-    );
+    const result = await query(
+      'DELETE FROM saved_recipes WHERE (id = ? OR recipe_id = ?) AND user_id = ?',
+      [id, id, req.user.id]
+    );
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
-        error: 'Recipe not found'
-      });
-    }
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: 'Recipe not found'
+      });
+    }
 
-    res.json({
-      success: true,
-      message: 'Recipe removed successfully'
-    });
+    res.json({
+      success: true,
+      message: 'Recipe removed successfully'
+    });
 
-  } catch (error) {
-    console.error('Remove recipe error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to remove recipe'
-    });
-  }
+  } catch (error) {
+    console.error('Remove recipe error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to remove recipe'
+    });
+  }
 });
 
 // ============================================
 // Check if Recipe is Saved (기존 코드 유지)
 // ============================================
 router.get('/check/:recipe_id', async (req, res) => {
-  try {
-    const { recipe_id } = req.params;
+  try {
+    const { recipe_id } = req.params;
 
-    const recipes = await query(
-      'SELECT id FROM saved_recipes WHERE user_id = ? AND recipe_id = ?',
-      [req.user.id, recipe_id]
-    );
+    const recipes = await query(
+      'SELECT id FROM saved_recipes WHERE user_id = ? AND recipe_id = ?',
+      [req.user.id, recipe_id]
+    );
 
-    res.json({
-      saved: recipes.length > 0,
-      id: recipes.length > 0 ? recipes[0].id : null
-    });
+    res.json({
+      saved: recipes.length > 0,
+      id: recipes.length > 0 ? recipes[0].id : null
+    });
 
-  } catch (error) {
-    console.error('Check recipe error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to check recipe'
-    });
-  }
+  } catch (error) {
+    console.error('Check recipe error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to check recipe'
+    });
+  }
 });
 
 // ============================================
 // Get Recipes by Category (기존 코드 유지)
 // ============================================
 router.get('/category/:category', async (req, res) => {
-  try {
-    const { category } = req.params;
+  try {
+    const { category } = req.params;
 
-    const recipes = await query(
-      `SELECT * FROM saved_recipes 
-       WHERE user_id = ? AND category = ? 
-       ORDER BY saved_at DESC`,
-      [req.user.id, category]
-    );
+    const recipes = await query(
+      `SELECT * FROM saved_recipes 
+       WHERE user_id = ? AND category = ? 
+       ORDER BY saved_at DESC`,
+      [req.user.id, category]
+    );
 
-    // Parse JSON fields
-    recipes.forEach(recipe => {
-      if (recipe.ingredients && typeof recipe.ingredients === 'string') {
-        recipe.ingredients = JSON.parse(recipe.ingredients);
-      }
-      if (recipe.steps && typeof recipe.steps === 'string') {
-        recipe.steps = JSON.parse(recipe.steps);
-      }
-    });
+    // Parse JSON fields
+    recipes.forEach(recipe => {
+      if (recipe.ingredients && typeof recipe.ingredients === 'string') {
+        recipe.ingredients = JSON.parse(recipe.ingredients);
+      }
+      if (recipe.steps && typeof recipe.steps === 'string') {
+        recipe.steps = JSON.parse(recipe.steps);
+      }
+    });
 
-    res.json({ recipes });
+    res.json({ recipes });
 
-  } catch (error) {
-    console.error('Get recipes by category error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to fetch recipes'
-    });
-  }
+  } catch (error) {
+    console.error('Get recipes by category error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to fetch recipes'
+    });
+  }
 });
 
 // ============================================
 // Add to Cooking History (기존 코드 유지)
 // ============================================
 router.post('/history', async (req, res) => {
-  try {
-    const { recipe_id, recipe_name, rating, notes } = req.body;
+  try {
+    const { recipe_id, recipe_name, rating, notes } = req.body;
 
-    if (!recipe_id || !recipe_name) {
-      return res.status(400).json({
-        error: 'Validation error',
-        message: 'Recipe ID and name are required'
-      });
-    }
+    if (!recipe_id || !recipe_name) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'Recipe ID and name are required'
+      });
+    }
 
-    const id = uuidv4();
+    const id = uuidv4();
 
-    await query(
-      `INSERT INTO cooking_history (id, user_id, recipe_id, recipe_name, rating, notes) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, req.user.id, recipe_id, recipe_name, rating || null, notes || null]
-    );
+    await query(
+      `INSERT INTO cooking_history (id, user_id, recipe_id, recipe_name, rating, notes) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [id, req.user.id, recipe_id, recipe_name, rating || null, notes || null]
+    );
 
-    res.status(201).json({
-      success: true,
-      message: 'Added to cooking history'
-    });
+    res.status(201).json({
+      success: true,
+      message: 'Added to cooking history'
+    });
 
-  } catch (error) {
-    console.error('Add cooking history error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to add cooking history'
-    });
-  }
+  } catch (error) {
+    console.error('Add cooking history error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to add cooking history'
+    });
+  }
 });
 
 // ============================================
 // Get Cooking History (기존 코드 유지)
 // ============================================
 router.get('/history', async (req, res) => {
-  try {
-    const limit = req.query.limit || 50;
+  try {
+    const limit = req.query.limit || 50;
 
-    const history = await query(
-      `SELECT * FROM cooking_history 
-       WHERE user_id = ? 
-       ORDER BY completed_at DESC 
-       LIMIT ?`,
-      [req.user.id, parseInt(limit)]
-    );
+    const history = await query(
+      `SELECT * FROM cooking_history 
+       WHERE user_id = ? 
+       ORDER BY completed_at DESC 
+       LIMIT ?`,
+      [req.user.id, parseInt(limit)]
+    );
 
-    res.json({ history });
+    res.json({ history });
 
-  } catch (error) {
-    console.error('Get cooking history error:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to fetch cooking history'
-    });
-  }
+  } catch (error) {
+    console.error('Get cooking history error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to fetch cooking history'
+    });
+  }
 });
 
 // ✅ 저장한 레시피 단건 조회 (user_id 무시 버전)
 // ✅ 완료한 레시피 단건 조회 (AI + 공개 레시피 모두 대응)
 router.get("/:id", async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.params;
 
-  try {
-    const rows = await query(
-      `
-      SELECT *
-      FROM completed_recipes
-      WHERE id = ? OR recipe_id = ?
-      LIMIT 1
-      `,
-      [id, id]
-    );
+  try {
+    const rows = await query(
+      `
+      SELECT *
+      FROM completed_recipes
+      WHERE id = ? OR recipe_id = ?
+      LIMIT 1
+      `,
+      [id, id]
+    );
 
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ error: "레시피 없음" });
-    }
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "레시피 없음" });
+    }
 
-    const r = rows[0];
+    const r = rows[0];
 
-    const ingredients = r.ingredients_json
-      ? JSON.parse(r.ingredients_json)
-      : [];
+    const ingredients = r.ingredients_json
+      ? JSON.parse(r.ingredients_json)
+      : [];
 
-    const steps = r.steps_json
-      ? JSON.parse(r.steps_json)
-      : [];
+    const steps = r.steps_json
+      ? JSON.parse(r.steps_json)
+      : [];
 
-    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Cache-Control", "no-store");
 
-    res.json({
-      recipe: {
-        id: r.id,                      // ✅ 이제 진짜 DB id 반환
-        name: r.name,
-        image: r.image,
-        description: r.description,
-        category: r.category,
-        cooking_method: r.cooking_method,
-        hashtags: r.hashtags,
-        ingredients,
-        steps,
-        completedAt: r.completed_at,
-        cookingTime: r.cooking_time,
-        servings: r.servings,
-        difficulty: r.difficulty,
-      },
-    });
-  } catch (err) {
-    console.error("❌ completed-recipes 단건 조회 실패:", err);
-    res.status(500).json({ error: "서버 오류" });
-  }
+    res.json({
+      recipe: {
+        id: r.id,                      // ✅ 이제 진짜 DB id 반환
+        name: r.name,
+        image: r.image,
+        description: r.description,
+        category: r.category,
+        cooking_method: r.cooking_method,
+        hashtags: r.hashtags,
+        ingredients,
+        steps,
+        completedAt: r.completed_at,
+        cookingTime: r.cooking_time,
+        servings: r.servings,
+        difficulty: r.difficulty,
+      },
+    });
+  } catch (err) {
+    console.error("❌ completed-recipes 단건 조회 실패:", err);
+    res.status(500).json({ error: "서버 오류" });
+  }
 });
-
-
-
 
 
 export default router;

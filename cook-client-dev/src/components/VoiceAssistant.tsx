@@ -1,4 +1,4 @@
-// === VoiceAssistant.tsx — 최종 통합 버전 (Ref/Import/AI Flow Fix) ===
+// === VoiceAssistant.tsx — 최종 통합 버전 (SyntaxError Fix) ===
 import { useState, useRef, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
@@ -213,7 +213,7 @@ export function VoiceAssistant({
 
 
   // ===============================
-  // 무음 타이머 관리 (2초)
+  // 무음 타이머 관리 (2초) - 💡 [SyntaxError Fix: 단일 정의 블록]
   // ===============================
   const clearSilenceTimer = () => {
     if (silenceTimerRef.current !== null) {
@@ -427,13 +427,13 @@ export function VoiceAssistant({
     wakeRecognizerRef.current = recognizer;
 
     try {
-      console.log("[wake] start() 호출");
-      recognizer.start();
+        console.log("[wake] start() 호출");
+        recognizer.start();
     } catch (e) {
-      console.error("[wake] start() 예외:", e);
-      setIsWakeActive(false);
-      hardErrorRef.current = true;
-      toast.error("웨이크워드 인식을 시작할 수 없습니다.");
+        console.error("[wake] start() 예외:", e);
+        setIsWakeActive(false);
+        hardErrorRef.current = true;
+        toast.error("웨이크워드 인식을 시작할 수 없습니다.");
     }
   };
 
@@ -905,345 +905,345 @@ useEffect(() => {
     }
   };
 
-  // ===============================
-  // 무음 타이머 관리 (2초)
-  // ===============================
-  const clearSilenceTimer = () => {
-    if (silenceTimerRef.current !== null) {
-      window.clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-  };
+  // ===============================
+  // 무음 타이머 관리 (2초)
+  // ===============================
+  const clearSilenceTimer = () => {
+    if (silenceTimerRef.current !== null) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+  };
 
-  const stopCommandListening = () => {
-  clearSilenceTimer();
-  try { commandRecognizerRef.current?.stop(); } catch {}
-  commandRecognizerRef.current = null; // ← 추가!!!
-  };
+  const stopCommandListening = () => {
+  clearSilenceTimer();
+  try { commandRecognizerRef.current?.stop(); } catch {}
+  commandRecognizerRef.current = null; // ← 추가!!!
+  };
 
-  const stopWakeListening = () => {
-  try { wakeRecognizerRef.current?.stop(); } catch {}
-  wakeRecognizerRef.current = null; // ← 추가!!!
-  };
+  const stopWakeListening = () => {
+  try { wakeRecognizerRef.current?.stop(); } catch {}
+  wakeRecognizerRef.current = null; // ← 추가!!!
+  };
 
-  const stopAllListening = () => {
-    hardErrorRef.current = false; // 버튼으로 끌 때는 에러 상태 리셋
-    stopWakeListening();
-    stopCommandListening();
-    setIsWakeActive(false);
-  };
+  const stopAllListening = () => {
+    hardErrorRef.current = false; // 버튼으로 끌 때는 에러 상태 리셋
+    stopWakeListening();
+    stopCommandListening();
+    setIsWakeActive(false);
+  };
 
-  const resetSilenceTimer = () => {
-    clearSilenceTimer();
-    // 2초 동안 아무 말 없으면 자동으로 명령 인식 종료
-    silenceTimerRef.current = window.setTimeout(() => {
-      stopCommandListening();
-      if (isWakeActiveRef.current && !hardErrorRef.current) {
-        startWakeListening();
-      }
-    }, 2000);
-  };
+  const resetSilenceTimer = () => {
+    clearSilenceTimer();
+    // 2초 동안 아무 말 없으면 자동으로 명령 인식 종료
+    silenceTimerRef.current = window.setTimeout(() => {
+      stopCommandListening();
+      if (isWakeActiveRef.current && !hardErrorRef.current) {
+        startWakeListening(); 
+      }
+    }, 2000);
+  };
 
-  // ===============================
-  // 웨이크워드 시작 ("안녕")
-  // ===============================
-  const startWakeListening = () => {
-    const SpeechRecognition =
-      (window as any).webkitSpeechRecognition ||
-      (window as any).SpeechRecognition;
+  // ===============================
+  // 웨이크워드 시작 ("안녕")
+  // ===============================
+  const startWakeListening = () => {
+    const SpeechRecognition =
+      (window as any).webkitSpeechRecognition ||
+      (window as any).SpeechRecognition;
 
-    if (!SpeechRecognition) {
-      toast.error("브라우저가 음성 인식을 지원하지 않습니다.");
-      return;
-    }
+    if (!SpeechRecognition) {
+      toast.error("브라우저가 음성 인식을 지원하지 않습니다.");
+      return;
+    }
 
-    stopWakeListening();
-    hardErrorRef.current = false;
+    stopWakeListening();
+    hardErrorRef.current = false;
 
-    const recognizer = new SpeechRecognition();
-    recognizer.lang = "ko-KR";
-    recognizer.continuous = true;
-    recognizer.interimResults = true;
+    const recognizer = new SpeechRecognition();
+    recognizer.lang = "ko-KR";
+    recognizer.continuous = true;
+    recognizer.interimResults = true;
 
-    recognizer.onstart = () => {
-      console.log("[wake] onstart");
-      setIsWakeActive(true);
-    };
+    recognizer.onstart = () => {
+      console.log("[wake] onstart");
+      setIsWakeActive(true);
+    };
 
-    recognizer.onresult = (e: any) => {
-  const result = e.results[e.results.length - 1];
-  const text: string = result[0].transcript || "";
-  const normalized = text.replace(/\s+/g, "");
+    recognizer.onresult = (e: any) => {
+  const result = e.results[e.results.length - 1];
+  const text: string = result[0].transcript || "";
+  const normalized = text.replace(/\s+/g, "");
 
-  console.log("[wake] result:", text, "=>", normalized);
-  // 여러 개 웨이크워드 허용
-  const wakeWords = ["안녕", "시작", "요리야", "요리도우미", "헤이요리"];
+  console.log("[wake] result:", text, "=>", normalized);
+  // 여러 개 웨이크워드 허용
+  const wakeWords = ["안녕", "시작", "요리야", "요리도우미", "헤이요리"];
 
-  if (wakeWords.some((word) => normalized.includes(word))) {
-    console.log("[wake] 웨이크워드 감지 → command 모드로 전환");
+  if (wakeWords.some((word) => normalized.includes(word))) {
+    console.log("[wake] 웨이크워드 감지 → command 모드로 전환");
 
-    try {
-      recognizer.onresult = null;
-      recognizer.onend = null;
-      recognizer.onerror = null;
-      recognizer.onstart = null;
-      recognizer.stop();
-    } catch (e) {
-      console.error("[wake] stop() error:", e);
-    }
+    try {
+      recognizer.onresult = null;
+      recognizer.onend = null;
+      recognizer.onerror = null;
+      recognizer.onstart = null;
+      recognizer.stop();
+    } catch (e) {
+      console.error("[wake] stop() error:", e);
+    }
 
-    // wake 완전히 종료된 뒤 커맨드 모드 시작
-    setTimeout(() => {
-      startCommandListening();
-    }, 500);
-  }
+    // wake 완전히 종료된 뒤 커맨드 모드 시작
+    setTimeout(() => {
+      startCommandListening();
+    }, 500);
+  }
 };
 
 
-    recognizer.onerror = (e: any) => {
-      console.error("[wake] onerror:", e);
-      // ✅ stop() 호출로 인한 정상 종료 → 신경 안 씀
-    if (e.error === "aborted") {
-    console.log("[wake] aborted (stop() 호출로 인한 정상 종료)");
-    return;
-    }
-      if (
-        e.error === "not-allowed" ||
-        e.error === "audio-capture" ||
-        e.error === "network" ||
-        e.error === "service-not-allowed"
-      ) {
-        hardErrorRef.current = true;
-        isWakeActiveRef.current = false;
-        setIsWakeActive(false);
-        setVoiceFatalError(true);
+    recognizer.onerror = (e: any) => {
+      console.error("[wake] onerror:", e);
+      // ✅ stop() 호출로 인한 정상 종료 → 신경 안 씀
+    if (e.error === "aborted") {
+    console.log("[wake] aborted (stop() 호출로 인한 정상 종료)");
+    return;
+    }
+      if (
+        e.error === "not-allowed" ||
+        e.error === "audio-capture" ||
+        e.error === "network" ||
+        e.error === "service-not-allowed"
+      ) {
+        hardErrorRef.current = true;
+        isWakeActiveRef.current = false;
+        setIsWakeActive(false);
+        setVoiceFatalError(true);
 
-        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
-          toast.error("브라우저에서 이 사이트의 마이크 사용이 차단되어 있어요.");
-        } else if (e.error === "audio-capture") {
-          toast.error("마이크 장치를 찾을 수 없어요. 시스템 설정을 확인해주세요.");
-        } else if (e.error === "network") {
-          toast.error(
-            "이 네트워크에서는 음성 인식 서버에 연결할 수 없어 자동 듣기를 사용할 수 없어요."
-          );
-        }
-        return;
-      }
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          toast.error("브라우저에서 이 사이트의 마이크 사용이 차단되어 있어요.");
+        } else if (e.error === "audio-capture") {
+          toast.error("마이크 장치를 찾을 수 없어요. 시스템 설정을 확인해주세요.");
+        } else if (e.error === "network") {
+          toast.error(
+            "이 네트워크에서는 음성 인식 서버에 연결할 수 없어 자동 듣기를 사용할 수 없어요."
+          );
+        }
+        return;
+      }
 
-      console.log("[wake] non-fatal error:", e.error);
-    };
+      console.log("[wake] non-fatal error:", e.error);
+    };
 
-    recognizer.onend = () => {
-      console.log(
-        "[wake] onend, isWakeActiveRef.current =",
-        isWakeActiveRef.current,
-        "isListening =",
-        isListening,
-        "hardErrorRef =",
-        hardErrorRef.current
-      );
+    recognizer.onend = () => {
+      console.log(
+        "[wake] onend, isWakeActiveRef.current =",
+        isWakeActiveRef.current,
+        "isListening =",
+        isListening,
+        "hardErrorRef =",
+        hardErrorRef.current
+      );
 
-      if (wakeRecognizerRef.current !== recognizer) {
-        return;
-      }
+      if (wakeRecognizerRef.current !== recognizer) {
+        return;
+      }
 
-      if (!isWakeActiveRef.current || hardErrorRef.current) {
-        console.log("[wake] stop: auto-restart disabled (user off or hardError)");
-        wakeRecognizerRef.current = null;
-        return;
-      }
+      if (!isWakeActiveRef.current || hardErrorRef.current) {
+        console.log("[wake] stop: auto-restart disabled (user off or hardError)");
+        wakeRecognizerRef.current = null;
+        return;
+      }
 
-      setTimeout(() => {
-        if (!isWakeActiveRef.current || hardErrorRef.current) return;
-        try {
-          console.log("[wake] restart start()");
-          recognizer.start();
-        } catch (err) {
-          console.error("[wake] restart error:", err);
-          wakeRecognizerRef.current = null;
-          hardErrorRef.current = true;
-        }
-      }, 300);
-    };
+      setTimeout(() => {
+        if (!isWakeActiveRef.current || hardErrorRef.current) return;
+        try {
+          console.log("[wake] restart start()");
+          recognizer.start();
+        } catch (err) {
+          console.error("[wake] restart error:", err);
+          wakeRecognizerRef.current = null;
+          hardErrorRef.current = true;
+        }
+      }, 300);
+    };
 
-    wakeRecognizerRef.current = recognizer;
+    wakeRecognizerRef.current = recognizer;
 
-    try {
-      console.log("[wake] start() 호출");
-      recognizer.start();
-    } catch (e) {
-      console.error("[wake] start() 예외:", e);
-      setIsWakeActive(false);
-      hardErrorRef.current = true;
-      toast.error("웨이크워드 인식을 시작할 수 없습니다.");
-    }
-  };
+    try {
+        console.log("[wake] start() 호출");
+        recognizer.start();
+    } catch (e) {
+        console.error("[wake] start() 예외:", e);
+        setIsWakeActive(false);
+        hardErrorRef.current = true;
+        toast.error("웨이크워드 인식을 시작할 수 없습니다.");
+    }
+  };
 
-  // ===============================
-  // 명령 음성 인식 (실제 대화 내용)
-  // ===============================
-  const startCommandListening = () => {
-    const SpeechRecognition =
-      (window as any).webkitSpeechRecognition ||
-      (window as any).SpeechRecognition;
+  // ===============================
+  // 명령 음성 인식 (실제 대화 내용)
+  // ===============================
+  const startCommandListening = () => {
+    const SpeechRecognition =
+      (window as any).webkitSpeechRecognition ||
+      (window as any).SpeechRecognition;
 
-    if (!SpeechRecognition) {
-      toast.error("브라우저가 음성 인식을 지원하지 않습니다.");
-      return;
-    }
+    if (!SpeechRecognition) {
+      toast.error("브라우저가 음성 인식을 지원하지 않습니다.");
+      return;
+    }
 
-    if (hardErrorRef.current) {
-      console.warn("[cmd] hardErrorRef=true → startCommandListening 생략");
-      return;
-    }
+    if (hardErrorRef.current) {
+      console.warn("[cmd] hardErrorRef=true → startCommandListening 생략");
+      return;
+    }
 
-    stopCommandListening();
-    clearSilenceTimer();
+    stopCommandListening();
+    clearSilenceTimer();
 
-    stopSpeaking();
-    setIsSpeaking(false);
+    stopSpeaking();
+    setIsSpeaking(false);
 
-    if (wakeRecognizerRef.current) {
-      stopWakeListening();
-    }
+    if (wakeRecognizerRef.current) {
+      stopWakeListening();
+    }
 
-    const recognizer = new SpeechRecognition();
-    recognizer.lang = "ko-KR";
-    recognizer.continuous = true;
-    recognizer.interimResults = true;
+    const recognizer = new SpeechRecognition();
+    recognizer.lang = "ko-KR";
+    recognizer.continuous = true;
+    recognizer.interimResults = true;
 
-    let finalText = "";
+    let finalText = "";
 
-    recognizer.onresult = (e: any) => {
-      const result = e.results[e.results.length - 1];
-      const text: string = result[0].transcript || "";
+    recognizer.onresult = (e: any) => {
+      const result = e.results[e.results.length - 1];
+      const text: string = result[0].transcript || "";
 
-      console.log("[cmd] partial:", text);
+      console.log("[cmd] partial:", text);
 
-      resetSilenceTimer();
+      resetSilenceTimer();
 
-      if (result.isFinal) {
-        finalText += " " + text;
-      }
-    };
+      if (result.isFinal) {
+        finalText += " " + text;
+      }
+    };
 
-    recognizer.onerror = (e: any) => {
-      console.error("[cmd] onerror:", e);
+    recognizer.onerror = (e: any) => {
+      console.error("[cmd] onerror:", e);
 
-      if (
-        e.error === "not-allowed" ||
-        e.error === "audio-capture" ||
-        e.error === "network" ||
-        e.error === "service-not-allowed"
-      ) {
-        hardErrorRef.current = true;
-        setVoiceFatalError(true);
+      if (
+        e.error === "not-allowed" ||
+        e.error === "audio-capture" ||
+        e.error === "network" ||
+        e.error === "service-not-allowed"
+      ) {
+        hardErrorRef.current = true;
+        setVoiceFatalError(true);
 
-        if (e.error === "network") {
-          toast.error(
-            "이 네트워크에서는 음성 인식 서버에 연결할 수 없어 음성 기능을 사용할 수 없어요."
-          );
-        } else {
-          toast.error(
-            "마이크 권한 / 장치 문제로 음성 인식을 사용할 수 없어요."
-          );
-        }
+        if (e.error === "network") {
+          toast.error(
+            "이 네트워크에서는 음성 인식 서버에 연결할 수 없어 음성 기능을 사용할 수 없어요."
+          );
+        } else {
+          toast.error(
+            "마이크 권한 / 장치 문제로 음성 인식을 사용할 수 없어요."
+          );
+        }
 
-        stopAllListening();
-        return;
-      }
+        stopAllListening();
+        return;
+      }
 
-      toast.error("음성 인식 중 오류가 발생했어요.");
-    };
+      toast.error("음성 인식 중 오류가 발생했어요.");
+    };
 
-    recognizer.onend = async () => {
-      console.log("[cmd] onend, finalText =", finalText);
-      clearSilenceTimer();
-      setIsListening(false);
-      commandRecognizerRef.current = null;
+    recognizer.onend = async () => {
+      console.log("[cmd] onend, finalText =", finalText);
+      clearSilenceTimer();
+      setIsListening(false);
+      commandRecognizerRef.current = null;
 
-      const trimmed = normalizeText(finalText);
-      if (trimmed.length > 0) {
-        await handleUserInput(trimmed);
-      }
+      const trimmed = normalizeText(finalText);
+      if (trimmed.length > 0) {
+        await handleUserInput(trimmed);
+      }
 
-      if (isWakeActiveRef.current && !hardErrorRef.current) {
-        startWakeListening();
-      }
-    };
+      if (isWakeActiveRef.current && !hardErrorRef.current) {
+        startWakeListening();
+      }
+    };
 
-    try {
-      console.log("[cmd] start() 호출");
-      recognizer.start();
-      commandRecognizerRef.current = recognizer;
-      setIsListening(true);
-      resetSilenceTimer();
-    } catch (e) {
-      console.error("[cmd] start() 예외:", e);
-      toast.error("명령 인식을 시작할 수 없습니다.");
-    }
-  };
+    try {
+      console.log("[cmd] start() 호출");
+      recognizer.start();
+      commandRecognizerRef.current = recognizer;
+      setIsListening(true);
+      resetSilenceTimer();
+    } catch (e) {
+      console.error("[cmd] start() 예외:", e);
+      toast.error("명령 인식을 시작할 수 없습니다.");
+    }
+  };
 
-  // ===============================
-  // 요리 완료
-  // ===============================
-  const handleCompleteCooking = async () => {
-    if (!recipeInfo) return;
+  // ===============================
+  // 요리 완료
+  // ===============================
+  const handleCompleteCooking = async () => {
+    if (!recipeInfo) return;
 
-    stopSpeaking();
-    setIsSpeaking(false);
+    stopSpeaking();
+    setIsSpeaking(false);
 
-    try {
-      const payload = {
-        id: recipeInfo.id ?? crypto.randomUUID(),
+    try {
+      const payload = {
+        id: recipeInfo.id ?? crypto.randomUUID(),
 
-        name: recipeInfo.name ?? recipeInfo.recipeName ?? "이름 없는 레시피",
-        image: recipeInfo.image ?? null,
-        description: recipeInfo.description ?? null,
-        category: recipeInfo.category ?? "기타",
+        name: recipeInfo.name ?? recipeInfo.recipeName ?? "이름 없는 레시피",
+        image: recipeInfo.image ?? null,
+        description: recipeInfo.description ?? null,
+        category: recipeInfo.category ?? "기타",
 
-        ingredients: Array.isArray(recipeInfo.ingredients)
-          ? recipeInfo.ingredients.map((ing: any) =>
-              typeof ing === "string"
-                ? { name: ing, amount: "" }
-                : {
-                    name: ing.name ?? "",
-                    amount: ing.amount ?? "",
-                  }
-            )
-          : [],
+        ingredients: Array.isArray(recipeInfo.ingredients)
+          ? recipeInfo.ingredients.map((ing: any) =>
+              typeof ing === "string"
+                ? { name: ing, amount: "" }
+                : {
+                    name: ing.name ?? "",
+                    amount: ing.amount ?? "",
+                  }
+            )
+          : [],
 
-        steps: Array.isArray(recipeInfo.steps)
-          ? recipeInfo.steps.map((s: any) => String(s))
-          : [],
+        steps: Array.isArray(recipeInfo.steps)
+          ? recipeInfo.steps.map((s: any) => String(s))
+          : [],
 
-        completedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
 
-        cookingTime: recipeInfo.cookingTime ?? null,
-        servings: recipeInfo.servings ?? null,
-        difficulty: recipeInfo.difficulty ?? null,
-      };
+        cookingTime: recipeInfo.cookingTime ?? null,
+        servings: recipeInfo.servings ?? null,
+        difficulty: recipeInfo.difficulty ?? null,
+      };
 
-      console.log("✅ 최종 전송 payload:", payload);
+      console.log("✅ 최종 전송 payload:", payload);
 
-      // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
-      await addCompletedRecipe(payload);   // 🔥🔥🔥 이게 핵심
-      // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
+      // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
+      await addCompletedRecipe(payload);   // 🔥🔥🔥 이게 핵심
+      // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
 
-      toast.success("완료한 요리가 저장되었습니다!");
+      toast.success("완료한 요리가 저장되었습니다!");
 
-      // ✅ App.tsx에 완료 이벤트 전달 → 완료 목록 갱신
-      onCookingComplete?.(recipeInfo);
+      // ✅ App.tsx에 완료 이벤트 전달 → 완료 목록 갱신
+      onCookingComplete?.(recipeInfo);
 
-    } catch (err) {
-      console.error("❌ 완료 레시피 저장 실패:", err);
-      toast.error("완료한 레시피 저장에 실패했습니다.");
-    }
-  };
+    } catch (err) {
+      console.error("❌ 완료 레시피 저장 실패:", err);
+      toast.error("완료한 레시피 저장에 실패했습니다.");
+    }
+  };
 
 
 
-  // ===============================
+  // ===============================
   // UI (컨버세이셔널 버튼 통합)
   // ===============================
   return (
@@ -1340,8 +1340,8 @@ useEffect(() => {
                           <div className="inline-block rounded-2xl rounded-bl-sm bg-white border border-gray-100 px-3 py-2 text-sm shadow-sm whitespace-pre-line">
                             {m.text}
                           </div>
-                            
-                            {/* 💡 [수정] 컨버세이셔널 버튼 UI: 메시지 아래에 버튼 렌더링 */}
+                            
+                            {/* 💡 [수정] 컨버세이셔널 버튼 UI: 메시지 아래에 버튼 렌더링 */}
                           {m.options && m.options.length > 0 && (
                             <div className="flex flex-col gap-2 mt-2 w-full"> {/* 수직 배열, w-full로 너비 통일 */}
                                 {m.options.map((option, idx) => (
