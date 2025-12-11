@@ -32,9 +32,9 @@ router.get('/public', async (req, res) => {
 
     const { category, search } = req.query;
 
-    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count, image_large AS image
-                    FROM recipes 
-                    WHERE (category IS NOT NULL AND category != '')`;
+    // 💡 [수정] SQL 쿼리 공백 제거 (ER_PARSE_ERROR 해결)
+    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count, image_large AS image FROM recipes WHERE (category IS NOT NULL AND category != '')`;
+    
     const params = [];
 
     if (category && category !== 'all') {
@@ -112,17 +112,15 @@ router.get('/full/:id', async (req, res) => {
 // ============================================
 router.get('/categories', async (req, res) => {
   try {
+    // 💡 [수정] SQL 쿼리 공백 제거
     const categories = await query(
-      `SELECT category, COUNT(*) as count 
-       FROM recipes 
-       GROUP BY category 
-       ORDER BY count DESC`
+      `SELECT category, COUNT(*) as count FROM recipes GROUP BY category ORDER BY count DESC`
     );
     
     const total = await query('SELECT COUNT(*) as total FROM recipes');
+    // 💡 [수정] SQL 쿼리 공백 제거
     const nullCount = await query(
-      `SELECT COUNT(*) as count FROM recipes 
-       WHERE category IS NULL OR category = ''`
+      `SELECT COUNT(*) as count FROM recipes WHERE category IS NULL OR category = ''`
     );
     
     res.json({
@@ -234,9 +232,7 @@ router.post('/crawl', async (req, res) => {
           // [수정] 기존 데이터가 존재하면 전체 필드 UPDATE 수행
           const updateParams = recipeValues.concat(fullRecipe.id); // [value1, value2, ..., id]
           await query(
-            `UPDATE recipes 
-             SET ${updateSetClause}
-             WHERE id = ?`,
+            `UPDATE recipes SET ${updateSetClause} WHERE id = ?`,
             updateParams
           );
           updated++;
@@ -245,8 +241,7 @@ router.post('/crawl', async (req, res) => {
           const insertColumns = ['id'].concat(allColumns).join(', ');
           const insertParams = [fullRecipe.id].concat(recipeValues); // [id, value1, value2, ...]
           await query(
-            `INSERT INTO recipes (${insertColumns}) 
-             VALUES (${insertPlaceholders})`, 
+            `INSERT INTO recipes (${insertColumns}) VALUES (${insertPlaceholders})`, 
             insertParams
           );
           
@@ -296,8 +291,7 @@ router.post('/session/start', authenticateToken, async (req, res) => {
     const sessionId = uuidv4();
     
     await query(
-      `INSERT INTO cooking_sessions (id, user_id, recipe_id, recipe_name, current_step) 
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO cooking_sessions (id, user_id, recipe_id, recipe_name, current_step) VALUES (?, ?, ?, ?, ?)`,
       [sessionId, req.user.id, recipe_id, recipe_name, 1]
     );
     
@@ -344,16 +338,13 @@ router.put('/session/finish/:id', authenticateToken, async (req, res) => {
     
     // Update session
     await query(
-      `UPDATE cooking_sessions 
-       SET finished_at = NOW(), total_time = ?, rating = ?, memo = ? 
-       WHERE id = ?`,
+      `UPDATE cooking_sessions SET finished_at = NOW(), total_time = ?, rating = ?, memo = ? WHERE id = ?`,
       [totalTime, rating || null, memo || null, id]
     );
     
     // Add to history
     await query(
-      `INSERT INTO cooking_history (user_id, recipe_id, recipe_name, rating, notes) 
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO cooking_history (user_id, recipe_id, recipe_name, rating, notes) VALUES (?, ?, ?, ?, ?)`,
       [req.user.id, session.recipe_id, session.recipe_name, rating || null, memo || null]
     );
 
@@ -396,10 +387,7 @@ router.put('/session/finish/:id', authenticateToken, async (req, res) => {
 router.get('/session/active', authenticateToken, async (req, res) => {
   try {
     const sessions = await query(
-      `SELECT * FROM cooking_sessions 
-       WHERE user_id = ? AND finished_at IS NULL 
-       ORDER BY started_at DESC 
-       LIMIT 1`,
+      `SELECT * FROM cooking_sessions WHERE user_id = ? AND finished_at IS NULL ORDER BY started_at DESC LIMIT 1`,
       [req.user.id]
     );
     
@@ -453,12 +441,9 @@ router.use(authenticateToken);
 // ============================================
 router.get('/', async (req, res) => {
   try {
+    // 💡 [수정] SQL 쿼리 공백 제거 (ER_PARSE_ERROR 해결)
     const recipes = await query(
-      `SELECT id, user_id, recipe_id, name, category, difficulty, cooking_time, 
-              image, description, ingredients, steps, saved_at 
-       FROM saved_recipes 
-       WHERE user_id = ? 
-       ORDER BY saved_at DESC`,
+      `SELECT id, user_id, recipe_id, name, category, difficulty, cooking_time, image, description, ingredients, steps, saved_at FROM saved_recipes WHERE user_id = ? ORDER BY saved_at DESC`,
       [req.user.id]
     );
 
@@ -524,9 +509,7 @@ router.post('/', async (req, res) => {
     const id = uuidv4();
 
     await query(
-      `INSERT INTO saved_recipes 
-       (id, user_id, recipe_id, name, category, difficulty, cooking_time, image, description, ingredients, steps) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO saved_recipes (id, user_id, recipe_id, name, category, difficulty, cooking_time, image, description, ingredients, steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         req.user.id,
@@ -609,8 +592,6 @@ router.delete('/:id', async (req, res) => {
 // ============================================
 router.get('/check/:recipe_id', async (req, res) => {
   try {
-    const { recipe_id } = req.params;
-
     const recipes = await query(
       'SELECT id FROM saved_recipes WHERE user_id = ? AND recipe_id = ?',
       [req.user.id, recipe_id]
@@ -638,9 +619,7 @@ router.get('/category/:category', async (req, res) => {
     const { category } = req.params;
 
     const recipes = await query(
-      `SELECT * FROM saved_recipes 
-       WHERE user_id = ? AND category = ? 
-       ORDER BY saved_at DESC`,
+      `SELECT * FROM saved_recipes WHERE user_id = ? AND category = ? ORDER BY saved_at DESC`,
       [req.user.id, category]
     );
 
@@ -682,8 +661,7 @@ router.post('/history', async (req, res) => {
     const id = uuidv4();
 
     await query(
-      `INSERT INTO cooking_history (id, user_id, recipe_id, recipe_name, rating, notes) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO cooking_history (id, user_id, recipe_id, recipe_name, rating, notes) VALUES (?, ?, ?, ?, ?, ?)`,
       [id, req.user.id, recipe_id, recipe_name, rating || null, notes || null]
     );
 
@@ -709,10 +687,7 @@ router.get('/history', async (req, res) => {
     const limit = req.query.limit || 50;
 
     const history = await query(
-      `SELECT * FROM cooking_history 
-       WHERE user_id = ? 
-       ORDER BY completed_at DESC 
-       LIMIT ?`,
+      `SELECT * FROM cooking_history WHERE user_id = ? ORDER BY completed_at DESC LIMIT ?`,
       [req.user.id, parseInt(limit)]
     );
 
@@ -734,12 +709,7 @@ router.get("/:id", async (req, res) => {
 
   try {
     const rows = await query(
-      `
-      SELECT *
-      FROM completed_recipes
-      WHERE id = ? OR recipe_id = ?
-      LIMIT 1
-      `,
+      `SELECT * FROM completed_recipes WHERE id = ? OR recipe_id = ? LIMIT 1`,
       [id, id]
     );
 

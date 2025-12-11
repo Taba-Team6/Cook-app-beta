@@ -1,77 +1,18 @@
 // cook-server-dev/services/recipeService.js
 
 // 💡 [1-1] AI 서비스 의존성 및 DB 트랜잭션 함수 임포트
-// Mongoose/Recipe 모델 관련 import는 절대 포함하지 않습니다.
-import { askGPT } from './aiService.js'; // 하이브리드 추천 로직에 사용될 예정
+import { askGPT } from './aiService.js'; 
 import { query, transaction } from '../config/db.js';
-import { extractPureIngredient } from './aiService.js'; // 재료 정제 함수 임포트 (getHybridRecipes에서 사용)
+import { extractPureIngredient } from './aiService.js'; 
 
 // ==========================================
-// 💡 [1-2] Helper 1: 사용자 프로필 및 재료 로드 함수 (500 오류 방지 로직 포함)
-// ==========================================
-/**
- * DB에서 사용자 프로필(알러지, 선호도) 및 보유 재료를 로드합니다.
- * @param {string} userId - 사용자 ID
- * @returns {Promise<object>} - GPT 프로필 형식의 객체
- */
-async function getUserProfileAndIngredients(userId) {
-    // 1. users 테이블에서 알러지/선호도 로드
-    const [userRows] = await query(
-        // preferences 컬럼에 dislikedIngredients, restrictions 등 모든 AI 관련 정보가 JSON으로 저장되어 있음
-        `SELECT allergies, preferences FROM users WHERE id = ?`,
-        [userId]
-    );
-
-    const user = userRows[0];
-
-    // 💡 [500 오류 방지 로직] 사용자 데이터가 없으면 기본 프로필 반환
-    if (!user) {
-        console.warn(`User ID ${userId} not found in DB, using default profile for AI.`);
-        return {
-            dislikedIngredients: [],
-            allergies: [],
-            restrictions: "None",
-            preferredCuisines: "All",
-            availableTools: [],
-            healthConditions: [],
-            availableIngredients: []
-        };
-    }
-    
-    // preferences와 allergies는 JSON 필드이므로 파싱
-    const preferences = user.preferences ? JSON.parse(user.preferences) : {};
-    const allergies = user.allergies ? JSON.parse(user.allergies) : [];
-
-    // 2. ingredients 테이블에서 보유 재료 로드
-    const [ingredientRows] = await query(
-        `SELECT name FROM ingredients WHERE user_id = ?`,
-        [userId]
-    );
-
-    const availableIngredients = ingredientRows.map(row => row.name);
-
-    // 3. GPT Profile 형식에 맞춰 데이터 통합
-    const profile = {
-        dislikedIngredients: preferences.dislikedIngredients || [],
-        allergies: allergies.map(a => a.name) || [], 
-        restrictions: preferences.restrictions || "None",
-        preferredCuisines: preferences.preferredCuisines || "All",
-        availableTools: preferences.availableTools || [],
-        healthConditions: preferences.healthConditions || [],
-        availableIngredients: availableIngredients
-    };
-
-    return profile;
-}
-
-// ==========================================
-// 💡 [1-2] Helper 2: DB 레시피를 클라이언트 형식에 맞게 변환하는 헬퍼 함수
+// 💡 [1-2] Helper 2: DB 레시피를 클라이언트 형식에 맞게 변환하는 헬퍼 함수 (안정화)
 // ==========================================
 /**
- * DB 레시피 로우 데이터를 클라이언트가 사용하기 쉬운 Recipe 타입으로 변환합니다.
- * @param {object} rawRecipe - DB에서 조회된 레시피 로우 데이터 (recipes 또는 gpt_temp_recipes 스키마)
- * @returns {object|null} - 클라이언트 Recipe 타입 객체
- */
+ * DB 레시피 로우 데이터를 클라이언트가 사용하기 쉬운 Recipe 타입으로 변환합니다.
+ * @param {object} rawRecipe - DB에서 조회된 레시피 로우 데이터 (recipes 또는 gpt_temp_recipes 스키마)
+ * @returns {object|null} - 클라이언트 Recipe 타입 객체
+ */
 const transformDbRecipe = (rawRecipe) => {
     if (!rawRecipe) return null;
     
@@ -79,18 +20,19 @@ const transformDbRecipe = (rawRecipe) => {
     const steps = [];
     for (let i = 1; i <= 20; i++) {
         const manualKey = `manual_${i.toString().padStart(2, '0')}`;
-        // DB 컬럼이 존재하고 값이 있을 경우에만 추가
-        if (rawRecipe[manualKey] && rawRecipe[manualKey].trim().length > 0) {
+        // 💡 [수정] DB 값이 문자열인지 확인하고 trim()을 적용하여 안정화
+        const manualText = rawRecipe[manualKey];
+
+        if (typeof manualText === 'string' && manualText.trim().length > 0) {
             steps.push({
                 step: steps.length + 1,
-                text: rawRecipe[manualKey],
-                image: null // 현재 DB 스키마에 이미지 필드는 없음
+                text: manualText.trim(),
+                image: null
             });
         }
     }
     
     // 클라이언트 통합에 용이하도록 객체 재구성
-    // DB의 info_energy는 클라이언트에서 calories로 사용됨
     const recipeIdNum = parseInt(rawRecipe.id, 10);
 
     return {
@@ -119,23 +61,74 @@ const transformDbRecipe = (rawRecipe) => {
         created_at: rawRecipe.created_at,
         updated_at: rawRecipe.updated_at,
         
-        // 💡 GPT 생성 레시피 플래그 (10000 이상이면 true)
         is_generated: recipeIdNum >= 10000 
     };
 };
 
 
 class RecipeService {
-    // 임시로 DB에 직접 쿼리하는 함수는 제거하고 Service 계층 함수만 정의합니다.
+    
+    // ==========================================
+    // 💡 [Fix 2] Helper 1: 사용자 프로필 및 재료 로드 함수 (클래스 메서드로 통합 - TypeError 해결)
+    // ==========================================
+    async getUserProfileAndIngredients(userId) {
+        // 1. users 테이블에서 알러지/선호도 로드
+        const [userRows] = await query(
+            `SELECT allergies, preferences FROM users WHERE id = ?`,
+            [userId]
+        );
+
+        const user = userRows[0];
+
+        // 💡 [500 오류 방지 로직]
+        if (!user) {
+            console.warn(`User ID ${userId} not found in DB, using default profile for AI.`);
+            return {
+                dislikedIngredients: [], allergies: [], restrictions: "None", preferredCuisines: "All",
+                availableTools: [], healthConditions: [], availableIngredients: []
+            };
+        }
+        
+        let preferences = {};
+        let allergies = [];
+
+        // 💡 [수정] JSON 파싱 오류 방지 try...catch 추가
+        try {
+            preferences = user.preferences ? JSON.parse(user.preferences) : {};
+        } catch (e) {
+            console.error("Error parsing user preferences JSON:", e);
+        }
+        try {
+            allergies = user.allergies ? JSON.parse(user.allergies) : [];
+        } catch (e) {
+            console.error("Error parsing user allergies JSON:", e);
+        }
+
+        // 2. ingredients 테이블에서 보유 재료 로드
+        const [ingredientRows] = await query(
+            `SELECT name FROM ingredients WHERE user_id = ?`,
+            [userId]
+        );
+
+        const availableIngredients = ingredientRows.map(row => row.name);
+
+        // 3. GPT Profile 형식에 맞춰 데이터 통합
+        const profile = {
+            dislikedIngredients: preferences.dislikedIngredients || [],
+            allergies: allergies.map(a => a.name) || [], 
+            restrictions: preferences.restrictions || "None",
+            preferredCuisines: preferences.preferredCuisines || "All",
+            availableTools: preferences.availableTools || [],
+            healthConditions: preferences.healthConditions || [],
+            availableIngredients: availableIngredients
+        };
+
+        return profile;
+    }
 
     // ==========================================
     // [1-3] ID 분기 조회 (recipes vs gpt_temp_recipes)
     // ==========================================
-    /**
-     * ID를 기반으로 recipes 또는 gpt_temp_recipes에서 레시피를 조회합니다.
-     * @param {string} id - 레시피 ID (문자열)
-     * @returns {Promise<object|null>} - 변환된 레시피 객체 또는 null
-     */
     async findRecipeById(id) {
         const recipeId = parseInt(id, 10);
         let sqlQuery;
@@ -166,12 +159,6 @@ class RecipeService {
     // ==========================================
     // [1-3] GPT 레시피 임시 저장 (ID 10000+ 할당)
     // ==========================================
-    /**
-     * GPT가 생성한 레시피 데이터를 gpt_temp_recipes 테이블에 저장합니다.
-     * @param {object} recipeData - GPT 응답을 DB 포맷으로 변환한 데이터
-     * @param {string} userId - 사용자 ID
-     * @returns {Promise<number>} - 새로 할당된 임시 레시피 ID
-     */
     async saveGptRecipe(recipeData, userId) {
         // 1. ID 생성 로직 (10000번대 할당)
         const [maxIdRow] = await query(`SELECT MAX(id) AS max_id FROM gpt_temp_recipes WHERE id >= 10000`);
@@ -202,15 +189,9 @@ class RecipeService {
     // ==========================================
     // [1-4] GPT 레시피 영구 승격 (트랜잭션으로 원자성 확보)
     // ==========================================
-    /**
-     * GPT 생성 레시피(ID 10000+)를 영구 DB(ID 4000+)로 승격시킵니다.
-     * @param {string} recipeId - 임시 레시피 ID (문자열)
-     * @returns {Promise<number>} - 새로 할당된 영구 레시피 ID
-     */
     async promoteRecipe(recipeId) {
         const gptRecipeId = parseInt(recipeId, 10);
         
-        // transaction 헬퍼 함수를 사용하여 원자적 작업 수행
         const newId = await transaction(async (connection) => {
             // 1. 임시 테이블에서 레시피 데이터 로드
             const [tempRows] = await connection.execute(`SELECT * FROM gpt_temp_recipes WHERE id = ?`, [gptRecipeId]);
@@ -226,7 +207,6 @@ class RecipeService {
 
             // 3. recipes 테이블에 INSERT
             const excludedColumns = ['id', 'created_at', 'updated_at', 'user_id']; 
-            // gpt_temp_recipes에는 completed_count, average_rating 컬럼이 포함되어 있으므로 그대로 사용
             const insertableColumns = Object.keys(recipeToPromote).filter(col => !excludedColumns.includes(col));
             
             const values = insertableColumns.map(col => recipeToPromote[col]);

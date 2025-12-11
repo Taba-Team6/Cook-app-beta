@@ -1,4 +1,5 @@
 // cook-server-dev/services/aiService.js
+
 import dotenv from "dotenv";
 import OpenAI, { toFile } from "openai";
 
@@ -28,12 +29,12 @@ export function extractPureIngredient(str) {
 // 💡 [1-5] Helper: GPT JSON → DB 스키마 포맷 변환
 // ==========================================
 /**
- * GPT의 클라이언트용 JSON 응답을 DB의 recipes/gpt_temp_recipes 스키마에 맞게 변환합니다.
- * @param {object} gptJson - GPT의 JSON 응답 원본
- * @param {object} profile - 사용자 프로필 (카테고리/도구 추출용)
- * @param {string} userId - 사용자 ID
- * @returns {object} - DB 삽입용 객체
- */
+ * GPT의 클라이언트용 JSON 응답을 DB의 recipes/gpt_temp_recipes 스키마에 맞게 변환합니다.
+ * @param {object} gptJson - GPT의 JSON 응답 원본
+ * @param {object} profile - 사용자 프로필 (카테고리/도구 추출용)
+ * @param {string} userId - 사용자 ID
+ * @returns {object} - DB 삽입용 객체
+ */
 function transformGptRecipeToDbFormat(gptJson, profile, userId) {
     // GPT JSON은 recipeName, fullIngredients, steps 등을 포함
     const steps = gptJson.steps || [];
@@ -80,16 +81,9 @@ function transformGptRecipeToDbFormat(gptJson, profile, userId) {
 const internalRecipeService = {
     // 🚨 [DB 쿼리] 레시피 DB에서 필터링에 필요한 데이터만 로드 (ID < 10000)
     async getRecipesForFiltering() {
-        // 💡 [최적화] AI 추천의 다양성을 위해 랜덤으로 500개만 가져옵니다.
-        const [rows] = await db.query(`
-            SELECT 
-                id, name, ingredients_details, 
-                info_sodium, info_carb, info_fat, info_protein, info_energy
-            FROM recipes 
-            WHERE id < 10000 
-            ORDER BY RAND()
-            LIMIT 500
-        `);
+        // 💡 [최적화 & 수정] SQL 쿼리 공백 제거
+        const [rows] = await db.query(`SELECT id, name, ingredients_details, info_sodium, info_carb, info_fat, info_protein, info_energy FROM recipes WHERE id < 10000 ORDER BY RAND() LIMIT 500`);
+        
         // DB 컬럼이 VARCHAR(50)이므로 숫자로 변환하여 사용하도록 처리
         return rows.map(r => ({
             ...r,
@@ -114,15 +108,16 @@ const internalRecipeService = {
 // 💡 [1-6] 하이브리드 레시피 추천 및 생성 (Core Logic)
 // ==========================================
 /**
- * 사용자 프로필과 보유 재료를 기반으로 DB 4개 + GPT 1개 레시피 목록을 반환합니다.
- * @param {string} userId - 사용자 ID
- * @returns {Promise<Array<object>>} - 5개의 추천 레시피 목록
- */
+ * 사용자 프로필과 보유 재료를 기반으로 DB 4개 + GPT 1개 레시피 목록을 반환합니다.
+ * @param {string} userId - 사용자 ID
+ * @returns {Promise<Array<object>>} - 5개의 추천 레시피 목록
+ */
 export async function getRecommendations(userId) {
     if (!userId) throw new Error("User ID is required for recommendation.");
     
     try {
         // 1. 사용자 프로필 및 보유 재료 로드 (recipeService에 위임)
+        // 💡 [Fix 2 처리] recipeService 인스턴스에 메서드가 정의되었으므로 호출 성공
         const profile = await recipeService.getUserProfileAndIngredients(userId); 
         const availableIngredients = profile.availableIngredients || [];
         
