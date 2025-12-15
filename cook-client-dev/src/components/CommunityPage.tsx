@@ -18,6 +18,28 @@ import { Input } from "./ui/input";
 import { getSavedRecipes, saveRecipe,removeSavedRecipe } from "../utils/api";
 import { getCompletedRecipeById } from "../utils/api";
 
+function HideOnErrorImage({
+  src,
+  alt,
+  className,
+  ...rest
+}: React.ImgHTMLAttributes<HTMLImageElement>) {
+  const [error, setError] = useState(false);
+
+  // src가 없거나 에러 발생하면 아무것도 렌더링하지 않음
+  if (!src || error) return null;
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setError(true)}
+      {...rest}
+    />
+  );
+}
+
 
 // =======================
 // 타입 정의 (DB 기준)
@@ -84,7 +106,7 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
   try {
     const token = sessionStorage.getItem("cooking_assistant_auth_token");
 
-    const res = await fetch("http://localhost:3001/api/community", {
+    const res = await fetch("/api/community", {
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -109,7 +131,7 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
     const token = sessionStorage.getItem("cooking_assistant_auth_token");
 
     const res = await fetch(
-      `http://localhost:3001/api/community/${reviewId}/comments`,
+      `/api/community/${reviewId}/comments`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -135,21 +157,51 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
   };
 
   // =======================
-  // 시간 표시
-  const getTimeAgo = (dateString: string) => {
-    const now = new Date();
-    const past = new Date(dateString);
-    const diffInMinutes = Math.floor(
-      (now.getTime() - past.getTime()) / (1000 * 60)
-    );
+// 시간 표시 (✅ KST/UTC 꼬임 방지)
+// =======================
+const parseApiDate = (value: string) => {
+  if (!value) return new Date(NaN);
 
-    if (diffInMinutes < 1) return "방금 전";
-    if (diffInMinutes < 60) return `${diffInMinutes}분 전`;
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `${diffInHours}시간 전`;
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `${diffInDays}일 전`;
-  };
+  // 1) 이미 ISO(Z/±hh:mm)면 그대로
+  // 예: 2025-12-15T03:10:00.000Z / 2025-12-15T03:10:00+09:00
+  if (/[zZ]|[+\-]\d{2}:\d{2}$/.test(value)) {
+    return new Date(value);
+  }
+
+  // 2) MySQL DATETIME 형태면 (타임존 없음) -> "UTC"로 간주해서 Z 붙임
+  // 예: 2025-12-15 03:10:00  => 2025-12-15T03:10:00Z
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return new Date(value.replace(" ", "T") + "Z");
+  }
+
+  // 3) 그 외는 기본 파싱
+  return new Date(value);
+};
+
+const getTimeAgo = (dateString: string) => {
+  const now = Date.now();
+  const past = parseApiDate(dateString).getTime();
+
+  if (Number.isNaN(past)) return ""; // 혹시 이상하면 빈값
+
+  const diffSec = Math.floor((now - past) / 1000);
+
+  if (diffSec < 30) return "방금 전";
+  if (diffSec < 60) return `${diffSec}초 전`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}분 전`;
+
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}시간 전`;
+
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay === 1) return "어제";
+  if (diffDay < 7) return `${diffDay}일 전`;
+
+  return parseApiDate(dateString).toLocaleDateString("ko-KR");
+};
+
 
   // =======================
   // 댓글 토글
@@ -172,7 +224,7 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
   );
 
   await fetch(
-    `http://localhost:3001/api/community/${reviewId}/comments`,
+    `/api/community/${reviewId}/comments`,
     {
       method: "POST",
       headers: {
@@ -198,7 +250,7 @@ const handleDeleteComment = async (reviewId: string, commentId: string) => {
 
   try {
     await fetch(
-      `http://localhost:3001/api/community/${reviewId}/comments/${commentId}`,
+      `/api/community/${reviewId}/comments/${commentId}`,
       {
         method: "DELETE",
         headers: {
@@ -335,7 +387,7 @@ const handleSaveRecipe = async (review: CommunityReview) => {
 
   try {
     const res = await fetch(
-      `http://localhost:3001/api/community/${reviewId}`,
+      `/api/community/${reviewId}`,
       {
         method: "DELETE",
         headers: {
@@ -443,11 +495,12 @@ const handleSaveRecipe = async (review: CommunityReview) => {
                 </div>
 
                 {displayImage && (
-                  <ImageWithFallback
-                    src={displayImage}
-                    className="w-full h-72 object-cover"
-                    alt="review"
-                  />
+                  <HideOnErrorImage
+  src={displayImage}
+  alt="review"
+  className="w-full h-72 object-cover"
+/>
+
                 )}
 
 

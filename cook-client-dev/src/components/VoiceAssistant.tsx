@@ -13,6 +13,8 @@ import { Progress } from "./ui/progress";
 import type { UserProfile } from "./ProfileSetup";
 import type { FullRecipe } from "./FoodRecipe";
 import { addCompletedRecipe } from "../utils/api";
+import { v4 as uuidv4 } from "uuid";
+
 
 
 // ===============================
@@ -253,7 +255,7 @@ useEffect(() => {
         .filter((line: string) => line && line.length > 0) ?? [];
 
     base = {
-      id: full.id ?? crypto.randomUUID(),
+      id: full.id ?? uuidv4(),
       name: full.name,
       recipeName: full.name,
       image: full.image ?? null,
@@ -621,6 +623,14 @@ useEffect(() => {
     //이 단락 수정
     // ===== 2) 재료 체크 단계 =====
     if (!ingredientsChecked) {
+      // 🟦 사용자 선택 해석
+      const isOption1 =
+        ["1", "1번", "첫번째", "첫 번째", "대체재", "대체재로 바꾸기", "대체재로 바꿀래"]
+          .some((k) => text === k || text.includes(k));
+
+      const isOption2 =
+        ["2", "2번", "두번째", "두 번째", "없어도 돼", "없이 만들기", "그냥 빼고", "그냥 만들기"]
+          .some((k) => text === k || text.includes(k));
       const readyKeywords = ["다 있어", "다있어", "재료 다 있어", "재료다있어"];
       if (readyKeywords.some((k) => text.includes(k))) {
         setIngredientsChecked(true);
@@ -643,28 +653,65 @@ useEffect(() => {
         handleStepStart(nowRecipe.steps[0]);
         return;
       }
+      //이거 수정
+      // 🟦 1번 / 2번 선택 처리
+      if (!awaitingReplacementChoice && replacementMode) {
 
-      // 🟦 사용자가 "대체재로 바꾸기(1번)"를 선택한 경우 → 여기서 직접 처리
-      if (
-        !awaitingReplacementChoice &&     // ←←← 이 조건을 꼭 추가해라!!!
-        replacementMode &&
-        ["1", "1번", "1번으로 할게", "대체재로 바꿀래", "대체재로 바꾸기"].some(
-          (k) => text.includes(k)
-        )
-      ) {
-        // 이제 실제 대체재(쪽파/부추/샐러리) 중 하나를 고르는 단계로 진입
-        setAwaitingReplacementChoice(true);
+        // 1️⃣ Option 1: 대체재로 바꾸기
+        if (isOption1) {
+          setAwaitingReplacementChoice(true);
 
-        const opts = replacementMode.options ?? [];
-        const optsText = opts
-          .map((opt, idx) => `${idx + 1}) ${opt}`)
-          .join("\n");
+          const opts = replacementMode.options ?? [];
+          const optsText = opts
+            .map((opt, idx) => `${idx + 1}) ${opt}`)
+            .join("\n");
 
-        addMessage(
-          `어떤 재료로 대체할까요?\n${optsText}\n\n사용하실 대체재 번호나 재료명을 말씀해 주세요.\n(예: "1번", "쪽파로 대체해줘")`,
-          "assistant"
-        );
-        return;
+          addMessage(
+            `어떤 재료로 대체할까요?\n${optsText}\n\n사용하실 대체재 번호나 재료명을 말씀해 주세요.`,
+            "assistant"
+          );
+          return;
+        }
+
+        // 2️⃣ Option 2: 없이 만들기 → Option 1과 동일하게 followup 처리
+        if (isOption2) {
+          try {
+            const followupText = `${replacementMode.missing ?? ""} 없이 만들게 해줘`;
+
+            const result: FollowupResult = await askCookingFollowup(
+              recipeInfoRef.current,
+              followupText,
+              userProfile
+            );
+
+            setRecipeInfo(result.recipe);
+
+            // assistantMessage 정리
+            let cleanAssistantMsg = (result.assistantMessage ?? "")
+              .replace(/요리를 바로 시작할까요[^\n]*/g, "")
+              .trim();
+
+            let merged = cleanAssistantMsg + "\n\n";
+
+            // 재료 목록 출력
+            if (result.recipe.fullIngredients && result.recipe.recipeName) {
+              const ingredList = result.recipe.fullIngredients.join("\n");
+              merged += `${result.recipe.recipeName} 재료 목록입니다:\n${ingredList}\n\n빠진 재료가 있으면 말해주세요!\n\n`;
+            }
+
+            // 마지막 문구 추가
+            merged += `요리를 바로 시작할까요?`;
+
+            addMessage(merged, "assistant");
+
+            // 흐름 초기화
+            setReplacementMode(null);
+            setAwaitingReplacementChoice(false);
+          } catch {
+            addMessage("재료를 제외한 레시피 업데이트에 실패했습니다.", "assistant");
+          }
+          return;
+        }
       }
 
       try {
@@ -1070,7 +1117,7 @@ useEffect(() => {
 
     try {
       const payload = {
-        id: recipeInfo.id ?? crypto.randomUUID(),
+        id: recipeInfo.id ?? uuidv4(),
 
         name: recipeInfo.name ?? recipeInfo.recipeName ?? "이름 없는 레시피",
         image: recipeInfo.image ?? null,
@@ -1102,7 +1149,7 @@ useEffect(() => {
       console.log("✅ 최종 전송 payload:", payload);
 
       // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
-      await addCompletedRecipe(payload);   // 🔥🔥🔥 이게 핵심
+      //await addCompletedRecipe(payload);   // 🔥🔥🔥 이게 핵심
       // ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅ ✅
 
       toast.success("완료한 요리가 저장되었습니다!");

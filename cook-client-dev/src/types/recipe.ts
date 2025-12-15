@@ -39,3 +39,31 @@ export interface Recipe {
     fat?: number; 
   };
 }
+
+// ✅ 완료한 레시피 (DB에서 내려오는 형태)
+export interface CompletedRecipe {
+  id: string;
+
+  // 기본 정보
+  name: string;
+  recipeName?: string;        // AI 레시피 호환
+  description?: string | null;
+  image?: string | null;
+  category?: string | null;
+
+  // 요리 정보
+  cookingTime?: number | string | null;
+  servings?: number | string | null;
+  difficulty?: string | null;
+
+  // 재료 / 단계
+  ingredients?: {
+    name: string;
+    amount: string;
+  }[];
+  steps?: string[];
+
+  // 완료 시간
+  completedAt: string;
+}
+

@@ -100,6 +100,11 @@ const handleStartAssistant = () => {
     image: recipe.image_large || recipe.image_small,
     category: recipe.category,
 
+    source: "db",               // 이 레시피는 DB에서 온 레시피다
+    isMutable: true,            // GPT가 자유롭게 변경 가능한 레시피다
+    originalIngredients: fullIngredients, // 원본 재료 백업
+
+
     // 문자열 배열 (재료 전체 문장)
     fullIngredients,                        
 

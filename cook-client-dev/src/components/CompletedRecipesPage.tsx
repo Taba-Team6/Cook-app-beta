@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { ChefHat, Clock, User } from "lucide-react";
 import type { Recipe } from "../types/recipe";
-import type { CompletedRecipe } from "../utils/api";
+import type { CompletedRecipe } from "../types/recipe";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 
 
@@ -26,17 +26,30 @@ interface CompletedRecipesPageProps {
 }
 
 const formatDate = (dateString: string) => {
+  // 🔥 UTC로 들어온 걸 KST로 강제 보정
   const date = new Date(dateString);
-  const now = new Date();
-  const diffTime = Math.abs(now.getTime() - date.getTime());
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const kstTime = date.getTime() + 9 * 60 * 60 * 1000;
 
-  if (diffDays === 0) return "오늘";
-  if (diffDays === 1) return "어제";
-  if (diffDays < 7) return `${diffDays}일 전`;
-  if (diffDays < 30) return `${Math.floor(diffDays / 7)}주 전`;
-  return date.toLocaleDateString("ko-KR");
+  const now = Date.now();
+  const diffSec = Math.floor((now - kstTime) / 1000);
+
+  if (diffSec < 30) return "방금 전";
+  if (diffSec < 60) return `${diffSec}초 전`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}분 전`;
+
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}시간 전`;
+
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay === 1) return "어제";
+  if (diffDay < 7) return `${diffDay}일 전`;
+  if (diffDay < 30) return `${Math.floor(diffDay / 7)}주 전`;
+
+  return new Date(kstTime).toLocaleDateString("ko-KR");
 };
+
 
 export function CompletedRecipesPage({
   completedRecipes,
@@ -115,6 +128,7 @@ export function CompletedRecipesPage({
                         className="w-full h-full object-cover"
                       />
                     </div>
+
 
                     {/* ✅ RIGHT CARD CONTENT (디자인 유지) */}
                     <div className="flex-1">

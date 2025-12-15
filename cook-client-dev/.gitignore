@@ -1,1 +1,12 @@
-node_modules
+# env
+.env
+.env.*
+frontend/.env
+backend/.env
+
+# deps & build
+node_modules/
+dist/
+
+# editor
+.vscode/
