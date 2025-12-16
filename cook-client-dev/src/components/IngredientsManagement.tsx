@@ -266,6 +266,15 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
     loadIngredients();
   }, []);
 
+  const sortByExpiry = (list: Ingredient[]) => {
+  return [...list].sort((a, b) => {
+    if (!a.expiryDate) return 1;
+    if (!b.expiryDate) return -1;
+    return new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime();
+  });
+};
+
+
   const loadIngredients = async () => {
     setLoading(true);
     try {
@@ -336,7 +345,19 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
         ...response.ingredient,
         location: response.ingredient.storage,
       };
-      setIngredients([...ingredients, newIngredient]);
+      setIngredients((prev) =>
+  sortByExpiry([
+    ...prev,
+    {
+      ...newIngredient,
+      expiryDate:
+        (newIngredient as any).expiry_date ??
+        (newIngredient as any).expiryDate ??
+        null,
+    },
+  ])
+);
+
       toast.success("식재료가 추가되었습니다");
       setIsAddDialogOpen(false);
       resetForm();
@@ -385,11 +406,24 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
         ...response.ingredient,
         location: response.ingredient.storage,
       };
-      setIngredients(
-        ingredients.map((ing) =>
-          ing.id === editingIngredient.id ? updatedIngredient : ing,
-        ),
-      );
+      setIngredients((prev) =>
+  sortByExpiry(
+    prev.map((ing) =>
+      ing.id === editingIngredient.id
+        ? {
+            ...updatedIngredient,
+            // 서버 응답 키가 expiry_date 일 수도 있어서 통일
+            expiryDate:
+              (updatedIngredient as any).expiry_date ??
+              (updatedIngredient as any).expiryDate ??
+              null,
+          }
+        : ing
+    )
+  )
+);
+
+
       toast.success("식재료가 수정되었습니다");
       setIsEditDialogOpen(false);
       setEditingIngredient(null);

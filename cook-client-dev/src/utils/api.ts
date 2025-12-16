@@ -86,10 +86,12 @@ export async function login(email: string, password: string) {
   );
 }
 
-// 🔽 여기 추가
-export async function resendVerification(email: string) {
+/* ===============================
+   ✅ 이메일 인증 (회원가입 전)
+   =============================== */
+export async function sendVerification(email: string) {
   return apiCall(
-    "/auth/resend-verification",
+    "/auth/send-verification",
     {
       method: "POST",
       body: JSON.stringify({ email }),
@@ -97,6 +99,15 @@ export async function resendVerification(email: string) {
     false
   );
 }
+
+export async function getVerificationStatus(email: string) {
+  return apiCall(
+    `/auth/verification-status?email=${encodeURIComponent(email)}`,
+    { method: "GET" },
+    false
+  ) as Promise<{ verified: boolean; expired?: boolean }>;
+}
+
 
 // ===============================
 // PROFILE

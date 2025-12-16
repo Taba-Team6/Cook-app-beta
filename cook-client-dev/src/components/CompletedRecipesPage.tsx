@@ -69,16 +69,43 @@ export function CompletedRecipesPage({
 
         {/* HEADER */}
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-              <ChefHat className="w-6 h-6" />
+          <div className="flex items-center justify-between mb-2">
+            {/* 왼쪽: 아이콘 + 타이틀 */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                <ChefHat className="w-6 h-6" />
+              </div>
+              <h1 className="text-xl font-semibold leading-none">
+                완료한 요리
+              </h1>
             </div>
-            <h1>완료한 요리</h1>
+            {/* 오른쪽: 완료한 레시피 개수 */}
+            <Badge
+              className="
+                flex items-center
+                h-9
+                px-4
+                text-sm
+                font-semibold
+                rounded-full
+
+                !bg-[#4f5f45]
+                !text-white
+
+                !border-0
+                shadow-sm
+              "
+            >
+              완료한 레시피 {completedRecipes.length}개
+            </Badge>
           </div>
-          <p className="text-muted-foreground">
-            지금까지 완료한 {completedRecipes.length}개의 레시피
-          </p>
-        </div>
+
+            {/* 설명은 따로 */}
+            <p className="text-muted-foreground">
+              요리를 다시 진행하고 싶다면 선택해보세요.<br /> AI 요리 보조가 바로 실행됩니다.
+            </p>
+          </div>
+
 
         {/* EMPTY STATE */}
         {completedRecipes.length === 0 ? (

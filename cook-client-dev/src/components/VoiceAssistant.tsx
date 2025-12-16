@@ -940,7 +940,7 @@ useEffect(() => {
 
   console.log("[wake] result:", text, "=>", normalized);
   // 여러 개 웨이크워드 허용
-  const wakeWords = ["두콩아"];
+  const wakeWords = ["두콩아","두콩","안녕"];
 
   if (wakeWords.some((word) => normalized.includes(word))) {
     console.log("[wake] 웨이크워드 감지 → command 모드로 전환");
@@ -1315,7 +1315,7 @@ useEffect(() => {
                   {isListening
                     ? "지금 말씀하세요..."
                     : isWakeActive
-                    ? `두콩아"이라고 불러보세요`
+                    ? `"두콩아"이라고 불러보세요`
                     : "자동 듣기 켜기"}
                 </span>
               </div>

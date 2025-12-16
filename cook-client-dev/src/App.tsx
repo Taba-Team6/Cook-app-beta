@@ -499,8 +499,13 @@ try {
     }
 
     // ✅ 2️⃣ 일반 공개 레시피
+    // ✅ 2️⃣ 일반 공개 레시피 (SavedPage에서 클릭한 경우)
     setInitialAiRecipe(null);
-    handleRecipeClick(recipeId);
+    setSelectedRecipeId(recipeId);
+    setSelectedRecipe(null);
+    setSelectedFullRecipe(null);
+    navigateToStep("full-recipe");
+
 
   } catch (e) {
     console.error("❌ 저장 레시피 클릭 실패:", e);

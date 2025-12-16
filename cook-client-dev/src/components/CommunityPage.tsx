@@ -356,27 +356,34 @@ const handleSaveRecipe = async (review: CommunityReview) => {
 
     if (alreadySaved) {
       await removeSavedRecipe(review.recipe_id);
-    } else {
-      // ✅ ✅ ✅ AI 완료 레시피에서 이미지 가져오기 (정상 경로)
+      } else {
+    let imageFromRecipe: string | null = null;
+
+    try {
+      // ✅ completed_recipes에 있는 경우만 이미지 가져오기
       const recipeRes = await getCompletedRecipeById(review.recipe_id);
 
-      const imageFromRecipe =
+      imageFromRecipe =
         recipeRes?.recipe?.image ??
         recipeRes?.image ??
         null;
-
-      await saveRecipe({
-        recipe_id: review.recipe_id,
-        name: review.recipe_name,
-        category: "기타",
-        image: imageFromRecipe,
-        difficulty: null,
-        cooking_time: null,
-        description: review.review ?? null,
-        ingredients: [],
-        steps: [],
-      });
+    } catch (err) {
+      // ✅ 일반 레시피 / 완료 레시피 아닌 경우
+      console.warn("⚠️ 완료 레시피 아님 → 이미지 없이 저장");
     }
+
+    await saveRecipe({
+      recipe_id: review.recipe_id,
+      name: review.recipe_name,
+      category: "기타",
+      image: imageFromRecipe, // ✅ null 허용
+      difficulty: null,
+      cooking_time: null,
+      description: review.review ?? null,
+      ingredients: [],
+      steps: [],
+    });
+  }
 
     await loadSaved();
     onRefreshSaved?.();

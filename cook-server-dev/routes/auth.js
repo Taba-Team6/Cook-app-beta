@@ -11,6 +11,88 @@ import { sendVerifyEmail } from "../utils/mailer.js";
 const router = express.Router();
 
 // ============================================
+// Send Verification Email (BEFORE signup)
+// ============================================
+router.post('/send-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Validation error', message: 'Email is required' });
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Validation error', message: 'Invalid email format' });
+    }
+
+    // 이미 가입된 이메일이면 막기(선택)
+    const existingUser = await query('SELECT id FROM users WHERE email = ?', [email]);
+    if (existingUser.length > 0) {
+      return res.status(400).json({ error: 'User already exists', message: 'Email is already registered' });
+    }
+
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 1000 * 60 * 60); // 1시간
+
+    // email_verifications에 upsert
+    await query(
+      `INSERT INTO email_verifications (email, token, expires_at, verified, verified_at)
+       VALUES (?, ?, ?, 0, NULL)
+       ON DUPLICATE KEY UPDATE token = VALUES(token), expires_at = VALUES(expires_at), verified = 0, verified_at = NULL`,
+      [email, verifyToken, expires]
+    );
+
+    const baseUrl = process.env.APP_BASE_URL || 'https://www.cookingmate.site';
+    const verifyUrl = `${baseUrl}/api/auth/verify-email?token=${verifyToken}`;
+
+    await sendVerifyEmail(email, verifyUrl);
+
+    return res.json({ success: true, message: '인증 메일을 보냈습니다.' });
+  } catch (e) {
+    console.error('send-verification error:', e);
+    return res.status(500).json({ error: 'Internal server error', message: 'Failed to send verification email' });
+  }
+});
+
+// ============================================
+// Check Verification Status
+// ============================================
+router.get('/verification-status', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Validation error', message: 'Email is required' });
+    }
+
+    const rows = await query(
+      `SELECT verified, expires_at
+       FROM email_verifications
+       WHERE email = ?`,
+      [email]
+    );
+
+    if (rows.length === 0) {
+      return res.json({ verified: false });
+    }
+
+    // 만료면 false 처리
+    const row = rows[0];
+    const expired = new Date(row.expires_at) <= new Date();
+
+    return res.json({
+      verified: !!row.verified && !expired,
+      expired,
+    });
+  } catch (e) {
+    console.error('verification-status error:', e);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+// ============================================
 // Sign Up
 // ============================================
 router.post('/signup', async (req, res) => {
@@ -53,34 +135,50 @@ router.post('/signup', async (req, res) => {
       });
     }
 
-    // Hash password
-    const passwordHash = await bcrypt.hash(password, 10);
-    const userId = uuidv4();
+    
+// ✅ 이메일이 인증되었는지 확인 (email_verifications 테이블)
+const v = await query(
+  `SELECT verified, expires_at FROM email_verifications WHERE email = ?`,
+  [email]
+);
 
-    // ✅ 이메일 인증 토큰 생성
-    const verifyToken = crypto.randomBytes(32).toString('hex');
-    const expires = new Date(Date.now() + 1000 * 60 * 60); // 1시간
+if (v.length === 0) {
+  return res.status(400).json({
+    error: 'Email not verified',
+    message: '이메일 인증이 필요합니다. 인증하기 버튼을 눌러주세요.'
+  });
+}
 
-    // ✅ 유저 생성 (인증 관련 컬럼 포함)
-    await query(
-      `INSERT INTO users 
-       (id, email, password_hash, name, is_verified, email_verify_token, email_verify_expires)
-       VALUES (?, ?, ?, ?, false, ?, ?)`,
-      [userId, email, passwordHash, name, verifyToken, expires]
-    );
+const expired = new Date(v[0].expires_at) <= new Date();
+if (expired || !v[0].verified) {
+  return res.status(400).json({
+    error: 'Email not verified',
+    message: '이메일 인증이 완료되지 않았습니다. 메일을 확인해주세요.'
+  });
+}
 
-    // ✅ 인증 메일 발송
-    const baseUrl = process.env.APP_BASE_URL || 'https://www.cookingmate.site';
-    const verifyUrl = `${baseUrl}/api/auth/verify-email?token=${verifyToken}`;
+/* =================================================
+   ✅ 여기까지
+   ================================================= */
 
-    await sendVerifyEmail(email, verifyUrl);
+// Hash password
+const passwordHash = await bcrypt.hash(password, 10);
+const userId = uuidv4();
 
-    // ✅ 프론트에 "인증 필요"만 알려줌
-    res.status(201).json({
-      success: true,
-      needEmailVerification: true,
-      message: '이메일로 인증 링크를 보냈습니다. 인증 후 로그인해주세요.'
-    });
+// ✅ 인증 완료된 상태로 유저 생성
+await query(
+  `INSERT INTO users (id, email, password_hash, name, is_verified)
+   VALUES (?, ?, ?, ?, true)`,
+  [userId, email, passwordHash, name]
+);
+
+// (선택) 인증 기록 정리
+await query(`DELETE FROM email_verifications WHERE email = ?`, [email]);
+
+return res.status(201).json({
+  success: true,
+  message: 'Signup successful'
+});
 
   } catch (error) {
     console.error('Signup error:', error);
@@ -217,7 +315,7 @@ router.get('/verify', authenticateToken, (req, res) => {
 });
 
 // ============================================
-// Verify Email
+// Verify Email (email_verifications 기반)
 // ============================================
 router.get('/verify-email', async (req, res) => {
   try {
@@ -227,35 +325,35 @@ router.get('/verify-email', async (req, res) => {
       return res.status(400).send('Invalid verification token');
     }
 
-    const users = await query(
-      `SELECT id FROM users
-       WHERE email_verify_token = ?
-         AND email_verify_expires > NOW()
-         AND is_verified = false`,
+    const rows = await query(
+      `SELECT email FROM email_verifications
+       WHERE token = ?
+         AND expires_at > NOW()
+         AND verified = 0`,
       [token]
     );
 
-    if (users.length === 0) {
+    if (rows.length === 0) {
       return res.status(400).send('인증 링크가 만료되었거나 잘못되었습니다');
     }
 
     await query(
-      `UPDATE users
-       SET is_verified = true,
-           email_verify_token = NULL,
-           email_verify_expires = NULL
-       WHERE id = ?`,
-      [users[0].id]
+      `UPDATE email_verifications
+       SET verified = 1,
+           verified_at = NOW()
+       WHERE token = ?`,
+      [token]
     );
 
     const fe = process.env.FRONTEND_URL || 'https://www.cookingmate.site';
-    res.redirect(`${fe}/email-verified`);
+    return res.redirect(`${fe}/email-verified?email=${encodeURIComponent(rows[0].email)}`);
 
   } catch (error) {
     console.error('Verify email error:', error);
-    res.status(500).send('Email verification failed');
+    return res.status(500).send('Email verification failed');
   }
 });
+
 
 
 export default router;

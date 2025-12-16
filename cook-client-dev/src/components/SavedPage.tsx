@@ -33,19 +33,44 @@ export function SavedPage({
     <div className="min-h-screen bg-background pt-20 pb-24">
       <div className="max-w-4xl mx-auto px-4 py-8">
 
-        {/* ✅ HEADER */}
+        {/* HEADER */}
         <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
-              <ChefHat className="w-6 h-6" />
+          <div className="flex items-center justify-between mb-2">
+            {/* 왼쪽: 아이콘 + 타이틀 */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
+                <ChefHat className="w-6 h-6" />
+              </div>
+              <h1 className="text-xl font-semibold leading-none">
+                저장한 요리
+              </h1>
             </div>
-            <h1>저장한 레시피</h1>
-          </div>
-          <p className="text-muted-foreground">
-            나중에 다시 만들 요리 {savedRecipes.length}개
-          </p>
-        </div>
+            {/* 오른쪽: 저장한 레시피 개수 */}
+            <Badge
+              className="
+                flex items-center
+                h-9
+                px-4
+                text-sm
+                font-semibold
+                rounded-full
 
+                !bg-[#4f5f45]
+                !text-white
+
+                !border-0
+                shadow-sm
+              "
+            >
+              저장한 레시피 {savedRecipes.length}개
+            </Badge>
+          </div>
+
+            {/* 설명은 따로 */}
+            <p className="text-muted-foreground">
+              요리를 다시 진행하고 싶다면 선택해보세요.<br /> AI 요리 보조가 바로 실행됩니다.
+            </p>
+          </div>
         {/* ✅ EMPTY STATE */}
         {savedRecipes.length === 0 ? (
           <Card>
