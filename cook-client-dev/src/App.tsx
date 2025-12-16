@@ -310,15 +310,21 @@ useEffect(() => {
     };
   }, []);
 
+  const resetCookingContext = () => {
+    setSelectedFullRecipe(null);
+    setInitialAiRecipe(null);
+  };
+
   // ------------------------------
   //   네비게이션 / 뒤로가기 처리
   // ------------------------------
   const navigateToStep = (newStep: AppStep, addToHistory = true) => {
-    if (
-      addToHistory &&
-      currentStep !== "auth" &&
-      currentStep !== newStep
-    ) {
+    // ✅ voice-assistant를 떠나는 순간 초기화
+    if (currentStep === "voice-assistant" && newStep !== "voice-assistant") {
+      resetCookingContext();
+    }
+
+    if (addToHistory && currentStep !== "auth" && currentStep !== newStep) {
       setPageHistory((prev) => [...prev, currentStep]);
     }
     setCurrentStep(newStep);
@@ -537,6 +543,7 @@ try {
   }
 
   // ✅ 일반 DB 레시피
+  setInitialAiRecipe(null);
   setSelectedRecipeId(recipeId);
   setSelectedRecipe(null);
   setSelectedFullRecipe(null);
@@ -552,6 +559,7 @@ const openVoiceAssistantFresh = () => {
 
 
   const handleStartCookingAssistant = (recipe: FullRecipe) => {
+    setInitialAiRecipe(null);
     setSelectedFullRecipe(recipe);
     navigateToStep("voice-assistant");
   };

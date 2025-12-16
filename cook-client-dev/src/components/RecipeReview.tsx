@@ -54,7 +54,7 @@ export function RecipeReview({ recipe, onSubmit, onSkip }: RecipeReviewProps) {
         "cooking_assistant_auth_token"
       );
 
-      const res = await fetch("http://localhost:3001/api/community", {
+      const res = await fetch("/api/community", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

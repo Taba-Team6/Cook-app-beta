@@ -13,51 +13,66 @@ const router = express.Router();
 // ============================================
 router.get('/public', async (req, res) => {
   try {
-    // 안전한 limit/offset 변환
     const rawLimit = req.query.limit;
     const rawOffset = req.query.offset;
 
-    // 정수로 강제 변환
     const limitParsed = parseInt(rawLimit, 10);
     const offsetParsed = parseInt(rawOffset, 10);
 
-    // NaN이면 기본값 설정
     const limit = Number.isNaN(limitParsed) ? 50 : limitParsed;
     const offset = Number.isNaN(offsetParsed) ? 0 : offsetParsed;
 
+    const category = req.query.category;
+    const search = req.query.search;
 
-    const { category, search } = req.query;
+    let queryStr = `
+      SELECT 
+        id,
+        name,
+        category,
+        cooking_method,
+        hashtags,
+        ingredients_count,
+        image_large AS image
+      FROM recipes
+      WHERE 1=1
+    `;
 
-    let queryStr = `SELECT id, name, category, cooking_method, hashtags, ingredients_count, image_large AS image
-                    FROM recipes 
-                    WHERE (category IS NOT NULL AND category != '')`;
     const params = [];
 
-    if (category && category !== 'all') {
-      queryStr += ' AND category = ?';
-      params.push(category);
+    // ✅ category 필터
+    if (
+      category &&
+      category !== 'all' &&
+      category !== 'undefined' &&
+      category.trim() !== ''
+    ) {
+      queryStr += ' AND TRIM(category) LIKE ?';
+      params.push('%' + category.trim() + '%');
     }
 
-    if (search) {
-      queryStr += ' AND name LIKE ?';
-      params.push(`%${search}%`);
-    }
+    // 🔐 limit / offset 숫자 강제 고정
+const safeLimit = Number.isInteger(limit) ? limit : 50;
+const safeOffset = Number.isInteger(offset) ? offset : 0;
 
-    queryStr += ` ORDER BY name ASC LIMIT ${limit} OFFSET ${offset}`;
+// ❌ LIMIT / OFFSET 바인딩 제거
+queryStr += ` ORDER BY name ASC LIMIT ${safeLimit} OFFSET ${safeOffset}`;
 
-    console.log(`[Public Recipes] Query: ${queryStr}`);
-    console.log(`[Public Recipes] Params:`, params);
+// ⛔ params.push(limit, offset); ← 이 줄 완전히 삭제
 
-    const recipes = await query(queryStr, params);
+console.log('[Public Recipes] Query:', queryStr);
+console.log('[Public Recipes] Params:', params);
 
-    console.log(`[Public Recipes] Found ${recipes.length} recipes`);
+const recipes = await query(queryStr, params);
 
-    res.json({
-      recipes,
-      total: recipes.length,
-      limit,
-      offset
-    });
+console.log(`[Public Recipes] Found ${recipes.length} recipes`);
+
+res.json({
+  recipes,
+  total: recipes.length,
+  limit: safeLimit,
+  offset: safeOffset
+});
 
   } catch (error) {
     console.error('[Public Recipes] Error:', error);
@@ -68,6 +83,7 @@ router.get('/public', async (req, res) => {
     });
   }
 });
+
 
 
 // ============================================

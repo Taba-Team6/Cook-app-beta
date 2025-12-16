@@ -49,9 +49,7 @@ export function MyPage({
         {/* 헤더 */}
         <div className="mb-6 flex items-center justify-between">
           <h1 className="text-3xl font-bold">마이페이지</h1>
-          <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Sparkles className="w-5 h-5 text-primary" />
-          </div>
+          
         </div>
 
         {/* ✅ 프로필 카드 (요리 초보자 멘트 제거됨) */}

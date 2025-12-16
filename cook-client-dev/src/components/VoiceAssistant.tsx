@@ -13,6 +13,8 @@ import { Progress } from "./ui/progress";
 import type { UserProfile } from "./ProfileSetup";
 import type { FullRecipe } from "./FoodRecipe";
 import { addCompletedRecipe } from "../utils/api";
+import { v4 as uuidv4 } from "uuid";
+
 
 
 // ===============================
@@ -253,7 +255,7 @@ useEffect(() => {
         .filter((line: string) => line && line.length > 0) ?? [];
 
     base = {
-      id: full.id ?? crypto.randomUUID(),
+      id: full.id ?? uuidv4(),
       name: full.name,
       recipeName: full.name,
       image: full.image ?? null,
@@ -1115,7 +1117,7 @@ useEffect(() => {
 
     try {
       const payload = {
-        id: recipeInfo.id ?? crypto.randomUUID(),
+        id: recipeInfo.id ?? uuidv4(),
 
         name: recipeInfo.name ?? recipeInfo.recipeName ?? "이름 없는 레시피",
         image: recipeInfo.image ?? null,

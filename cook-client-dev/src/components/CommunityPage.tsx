@@ -106,7 +106,7 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
   try {
     const token = sessionStorage.getItem("cooking_assistant_auth_token");
 
-    const res = await fetch("http://localhost:3001/api/community", {
+    const res = await fetch("/api/community", {
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -131,7 +131,7 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
     const token = sessionStorage.getItem("cooking_assistant_auth_token");
 
     const res = await fetch(
-      `http://localhost:3001/api/community/${reviewId}/comments`,
+      `/api/community/${reviewId}/comments`,
       {
         headers: {
           "Content-Type": "application/json",
@@ -194,7 +194,7 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
   );
 
   await fetch(
-    `http://localhost:3001/api/community/${reviewId}/comments`,
+    `/api/community/${reviewId}/comments`,
     {
       method: "POST",
       headers: {
@@ -220,7 +220,7 @@ const handleDeleteComment = async (reviewId: string, commentId: string) => {
 
   try {
     await fetch(
-      `http://localhost:3001/api/community/${reviewId}/comments/${commentId}`,
+      `/api/community/${reviewId}/comments/${commentId}`,
       {
         method: "DELETE",
         headers: {
@@ -357,7 +357,7 @@ const handleSaveRecipe = async (review: CommunityReview) => {
 
   try {
     const res = await fetch(
-      `http://localhost:3001/api/community/${reviewId}`,
+      `/api/community/${reviewId}`,
       {
         method: "DELETE",
         headers: {
