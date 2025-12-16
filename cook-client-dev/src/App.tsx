@@ -335,10 +335,10 @@ useEffect(() => {
   //   네비게이션 / 뒤로가기 처리
   // ------------------------------
   const navigateToStep = (newStep: AppStep, addToHistory = true) => {
-    // ✅ voice-assistant를 떠나는 순간 초기화
+    /* ✅ voice-assistant를 떠나는 순간 초기화
     if (currentStep === "voice-assistant" && newStep !== "voice-assistant") {
       resetCookingContext();
-    }
+    }*/
 
     if (addToHistory && currentStep !== "auth" && currentStep !== newStep) {
       setPageHistory((prev) => [...prev, currentStep]);
@@ -1129,7 +1129,7 @@ const handleCompletedRecipeClick = async (recipe: CompletedRecipe) => {
             setCurrentStep("home");
           }}
           onRecipeClick={() => navigateToStep("recipe-list")}
-          onAIClick={openVoiceAssistantFresh}
+          onAIClick={() => navigateToStep("voice-assistant")}
 
           onIngredientsClick={() =>
             navigateToStep("ingredients-management")
