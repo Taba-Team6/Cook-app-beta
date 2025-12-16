@@ -117,6 +117,42 @@ router.put('/', async (req, res) => {
   }
 });
 
+// ============================================
+// Delete Account
+// ============================================
+router.delete('/', async (req, res) => {
+  try {
+    const userEmail = req.user.email;
+
+    // 유저 존재 확인 + id 가져오기
+    const users = await query('SELECT id FROM users WHERE email = ?', [userEmail]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userId = users[0].id;
+
+    // ⚠️ (선택) user_id로 연결된 테이블이 있으면 여기서 먼저 삭제
+    // 예)
+    // await query('DELETE FROM ingredients WHERE user_id = ?', [userId]);
+    // await query('DELETE FROM completed_recipes WHERE user_id = ?', [userId]);
+    // await query('DELETE FROM saved_recipes WHERE user_id = ?', [userId]);
+    // await query('DELETE FROM user_stats WHERE id = ?', [userId]);
+
+    // 마지막에 users 삭제
+    await query('DELETE FROM users WHERE id = ?', [userId]);
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Delete account error:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to delete account',
+    });
+  }
+});
+
+
 
 // ============================================
 // Get User Statistics

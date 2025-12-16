@@ -1082,8 +1082,12 @@ const handleCompletedRecipeClick = async (recipe: CompletedRecipe) => {
 
         {/* 계정 설정 */}
         {currentStep === "account-settings" && (
-          <AccountSettings onBack={handleBackNavigation} />
+        <AccountSettings
+        onBack={handleBackNavigation}
+        onAccountDeleted={handleLogout}
+        />
         )}
+
 
         {/* 리뷰 */}
         {currentStep === "recipe-review" &&

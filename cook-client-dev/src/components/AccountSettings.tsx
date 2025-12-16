@@ -5,14 +5,15 @@ import { Label } from "./ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Separator } from "./ui/separator";
 import { ArrowLeft, User, Mail, Lock, AlertCircle } from "lucide-react";
-import { getCurrentUser, updateProfile } from "../utils/api";
+import { getCurrentUser, updateProfile, deleteAccount } from "../utils/api";
 import { toast } from "sonner";
 
 interface AccountSettingsProps {
   onBack: () => void;
+  onAccountDeleted: () => void;
 }
 
-export function AccountSettings({ onBack }: AccountSettingsProps) {
+export function AccountSettings({ onBack, onAccountDeleted }: AccountSettingsProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -111,11 +112,12 @@ export function AccountSettings({ onBack }: AccountSettingsProps) {
     }
 
     try {
-      // TODO: Implement account deletion in MySQL backend
-      toast.info("계정 삭제 기능은 곧 지원될 예정입니다");
+    await deleteAccount();
+    toast.success("계정이 삭제되었습니다");
+    onAccountDeleted(); // ✅ 여기서 App의 handleLogout으로 연결할 거임
     } catch (error: any) {
-      console.error('Delete account error:', error);
-      toast.error("계정 삭제 중 오류가 발생했습니다");
+    console.error("Delete account error:", error);
+    toast.error("계정 삭제 중 오류가 발생했습니다");
     }
   };
 

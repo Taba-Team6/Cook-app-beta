@@ -131,6 +131,10 @@ export async function getCurrentUser() {
   };
 }
 
+export async function deleteAccount() {
+  return apiCall("/profile", { method: "DELETE" }, true);
+}
+
 // ===============================
 // INGREDIENTS
 // ===============================
