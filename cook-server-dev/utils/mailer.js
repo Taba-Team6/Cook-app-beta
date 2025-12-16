@@ -1,10 +1,6 @@
 import nodemailer from "nodemailer";
 
-export async function sendVerifyEmail(email, verifyUrl) {
-  if (!email) {
-    throw new Error("sendVerifyEmail: email is undefined");
-  }
-
+export async function sendVerifyEmail(email, otp) {
   const transporter = nodemailer.createTransport({
     service: "Gmail",
     auth: {
@@ -15,12 +11,13 @@ export async function sendVerifyEmail(email, verifyUrl) {
 
   await transporter.sendMail({
     from: `"쿠킹메이트" <${process.env.MAIL_USER}>`,
-    to: email,                      // ✅ 반드시 있어야 함
-    subject: "쿠킹메이트 이메일 인증",
+    to: email,
+    subject: "쿠킹메이트 이메일 인증번호",
     html: `
-      <h2>이메일 인증</h2>
-      <p>아래 버튼을 클릭해주세요</p>
-      <a href="${verifyUrl}">이메일 인증하기</a>
+      <h2>이메일 인증번호</h2>
+      <p>아래 인증번호를 회원가입 화면에 입력해주세요.</p>
+      <h1 style="letter-spacing:4px;">${otp}</h1>
+      <p>⏰ 유효시간: 5분</p>
     `,
   });
 }

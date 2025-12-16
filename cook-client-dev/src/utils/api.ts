@@ -87,7 +87,7 @@ export async function login(email: string, password: string) {
 }
 
 /* ===============================
-   ✅ 이메일 인증 (회원가입 전)
+   ✅ OTP 인증 (회원가입 전)
    =============================== */
 export async function sendVerification(email: string) {
   return apiCall(
@@ -100,13 +100,17 @@ export async function sendVerification(email: string) {
   );
 }
 
-export async function getVerificationStatus(email: string) {
+export async function verifyOtp(email: string, code: string) {
   return apiCall(
-    `/auth/verification-status?email=${encodeURIComponent(email)}`,
-    { method: "GET" },
+    "/auth/verify-otp",
+    {
+      method: "POST",
+      body: JSON.stringify({ email, code }),
+    },
     false
-  ) as Promise<{ verified: boolean; expired?: boolean }>;
+  );
 }
+
 
 
 // ===============================
@@ -141,6 +145,11 @@ export async function getCurrentUser() {
     profile,
   };
 }
+
+export async function deleteAccount() {
+  return apiCall("/profile", { method: "DELETE" }, true);
+}
+
 
 // ===============================
 // INGREDIENTS

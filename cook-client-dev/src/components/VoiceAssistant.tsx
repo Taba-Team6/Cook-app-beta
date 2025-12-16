@@ -16,6 +16,8 @@ import { addCompletedRecipe } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
 
 
+const CHAT_SAVE_KEY = "voice_assistant_chat_state_v1";
+
 
 // ===============================
 // Types
@@ -122,7 +124,10 @@ export function VoiceAssistant({
   const [isFinished, setIsFinished] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-  //여기 수정
+
+  // ✅ sessionStorage에서 채팅을 복원했는지(초기화 useEffect가 덮어쓰지 않게)
+  const didRestoreRef = useRef(false);
+
   // ===============================
   // 🔥 타이머 상태
   // ===============================
@@ -157,6 +162,72 @@ const [pendingTimerSeconds, setPendingTimerSeconds] = useState<number | null>(nu
   useEffect(() => {
     isWakeActiveRef.current = isWakeActive;
   }, [isWakeActive]);
+
+  // ✅ 마운트 시: 이전 채팅 상태 복원
+  useEffect(() => {
+  try {
+    const raw = sessionStorage.getItem(CHAT_SAVE_KEY);
+    if (!raw) return;
+
+    const saved = JSON.parse(raw);
+
+    if (Array.isArray(saved.messages)) {
+      setMessages(
+        saved.messages.map((m: any) => ({
+          ...m,
+          timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+        }))
+      );
+    }
+
+    if (saved.recipeInfo) setRecipeInfo(saved.recipeInfo);
+    if (typeof saved.ingredientsChecked === "boolean") setIngredientsChecked(saved.ingredientsChecked);
+    if (typeof saved.cookingStarted === "boolean") setCookingStarted(saved.cookingStarted);
+    if (typeof saved.currentStepIndex === "number") setCurrentStepIndex(saved.currentStepIndex);
+    if (Array.isArray(saved.completedSteps)) setCompletedSteps(saved.completedSteps);
+
+    if ("timerSeconds" in saved) setTimerSeconds(saved.timerSeconds);
+    if ("timerRunning" in saved) setTimerRunning(saved.timerRunning);
+    if ("pendingTimerSeconds" in saved) setPendingTimerSeconds(saved.pendingTimerSeconds);
+    if ("originalTimerSeconds" in saved) setOriginalTimerSeconds(saved.originalTimerSeconds);
+
+    // ✅ 복원 완료 플래그
+    didRestoreRef.current = true;
+  } catch (e) {
+    console.error("채팅 상태 복원 실패:", e);
+  }
+  }, []);
+  // ✅ 상태 변경 시 자동 저장
+  useEffect(() => {
+  try {
+    const payload = {
+      messages,
+      recipeInfo,
+      ingredientsChecked,
+      cookingStarted,
+      currentStepIndex,
+      completedSteps,
+      timerSeconds,
+      timerRunning,
+      pendingTimerSeconds,
+      originalTimerSeconds,
+    };
+    sessionStorage.setItem(CHAT_SAVE_KEY, JSON.stringify(payload));
+  } catch (e) {
+    console.error("채팅 상태 저장 실패:", e);
+  }
+}, [
+  messages,
+  recipeInfo,
+  ingredientsChecked,
+  cookingStarted,
+  currentStepIndex,
+  completedSteps,
+  timerSeconds,
+  timerRunning,
+  pendingTimerSeconds,
+  originalTimerSeconds,
+  ]);
 
   // auto scroll
   useEffect(() => {
@@ -283,7 +354,10 @@ useEffect(() => {
   if (!base) return;
 
   // ===== 여기부터는 그대로 유지 =====
+  // ✅ sessionStorage로 복원한 상태가 있으면 채팅을 비우지 않음
+  if (!didRestoreRef.current) {
   setMessages([]);
+  }
   setRecipeInfo(base);
   setIngredientsChecked(false);
   setCookingStarted(false);
@@ -317,11 +391,13 @@ useEffect(() => {
   const lines = fullLines.length > 0 ? fullLines : ingredientLines;
   const title = base.recipeName ?? (base as any).name ?? "이 레시피";
 
+  // ✅ sessionStorage에서 복원한 경우엔 메시지 다시 찍지 않음
+  if (!didRestoreRef.current) {
   if (lines.length > 0) {
     addMessage(
-      `${title} 재료 목록입니다:\n${lines.join(
-        "\n"
-      )}\n\n빠진 재료가 있으면 말해주세요!`,
+      `${title} 재료 목록입니다:\n${lines.join("\n")}\n\n빠진 재료가 있으면 말해주세요!`,
+
+
       "assistant"
     );
   } else {
@@ -330,6 +406,7 @@ useEffect(() => {
       "assistant"
     );
   }
+}
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [initialRecipe, initialRecipeContext]);
 
@@ -455,6 +532,41 @@ useEffect(() => {
     setTimerSeconds(null);
     setOriginalTimerSeconds(null); 
   };
+
+    // 채팅 초기화
+  const resetChat = () => {
+  // 1) 타이머 정리
+  try {
+    stopTimer();
+  } catch (e) {
+    // stopTimer가 내부에서 예외 낼 가능성은 낮지만 안전하게
+    console.error(e);
+  }
+  setPendingTimerSeconds(null);
+  setOriginalTimerSeconds(null);
+  setTimerSeconds(null);
+  setTimerRunning(false);
+
+  // 2) 대화/요리 진행 상태 초기화
+  setMessages([]);
+  setRecipeInfo(null);
+  setIngredientsChecked(false);
+  setCookingStarted(false);
+  setCurrentStepIndex(0);
+  setCompletedSteps([]);
+  setIsFinished(false);
+
+  // 3) 대체재 흐름 초기화(너 파일에 있는 상태들)
+  setReplacementMode(null);
+  setAwaitingReplacementChoice(false);
+
+  // 4) 저장된 복원 데이터 삭제
+  sessionStorage.removeItem(CHAT_SAVE_KEY);
+
+  // 5) 안내 메시지 1줄 남기기(원치 않으면 삭제 가능)
+  addMessage("채팅을 초기화했어요. 다시 요리를 말해줘!", "assistant");
+  };
+
 
   //여기 수정 427까지
   // ===============================
@@ -1377,57 +1489,58 @@ useEffect(() => {
 
         {/* 입력 영역 */}
         <div className="mt-4 flex flex-col gap-3">
+  <div className="flex items-center gap-2">
+    <Input
+      value={textInput}
+      onChange={(e) => setTextInput(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !isProcessing) sendText();
+      }}
+      placeholder="메시지를 입력하세요"
+    />
+    <Button onClick={sendText} disabled={!textInput.trim() || isProcessing}>
+      <Send className="w-4 h-4" />
+    </Button>
+  </div>
 
-          <div className="flex items-center gap-2">
-            <Input
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !isProcessing) sendText();
-              }}
-              placeholder="메시지를 입력하세요"
-            />
-            <Button
-              onClick={sendText}
-              disabled={!textInput.trim() || isProcessing}
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-
-          {isSpeaking && (
-            <div className="flex justify-end">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  stopSpeaking();
-                  setIsSpeaking(false);
-                }}
-              >
-                말하기 멈추기
-              </Button>
-            </div>
-          )}
-
-          <Button
-            className="w-full mt-1"
-            size="lg"
-            onClick={handleCompleteCooking}
-            disabled={!recipeInfo || !isFinished}
-          >
-            요리 완료
-          </Button>
-
-          {!isFinished && recipeInfo && (
-            <p className="text-[11px] text-muted-foreground text-center">
-              단계 안내가 모두 끝나면 <strong>요리 완료</strong> 버튼을 눌러주세요.
-            </p>
-          )}
-
-        </div>
-
-      </div>
+  {isSpeaking && (
+    <div className="flex justify-end">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          stopSpeaking();
+          setIsSpeaking(false);
+        }}
+      >
+        말하기 멈추기
+      </Button>
     </div>
+
+  )}
+
+  {/* ✅ 채팅 초기화 버튼 */}
+  <Button variant="outline" className="w-full" onClick={resetChat}>
+    채팅 초기화
+  </Button>
+
+  {/* ✅ 요리 완료 버튼 */}
+  <Button
+    className="w-full mt-1"
+    size="lg"
+    onClick={handleCompleteCooking}
+    disabled={!recipeInfo || !isFinished}
+  >
+    요리 완료
+  </Button>
+
+  {!isFinished && recipeInfo && (
+    <p className="text-[11px] text-muted-foreground text-center">
+      단계 안내가 모두 끝나면 <strong>요리 완료</strong> 버튼을 눌러주세요.
+    </p>
+  )}
+</div>
+</div>
+</div>
   );
 }

@@ -16,7 +16,7 @@ import { CommunityPage } from "./components/CommunityPage";
 import { CompletedRecipesPage } from "./components/CompletedRecipesPage";
 import type { Recipe as AiRecipe } from "./types/recipe";
 
-import { EmailVerified } from "./components/EmailVerified";
+//import { EmailVerified } from "./components/EmailVerified";
 
 
 // ⭐ FoodRecipe / FullRecipe (첫 번째 코드에서 사용)
@@ -62,8 +62,7 @@ type AppStep =
   | "recipe-review"
   | "community"
   | "completed-recipes"
-  | "full-recipe"
-  | "email-verified"; 
+  | "full-recipe"; 
 
 interface RecipeDetailData {
   id: string;
@@ -217,14 +216,33 @@ localStorage.setItem(
     checkSession();
   }, []);
 
+
   // ------------------------------
-// ⭐ 이메일 인증 완료 페이지 직접 접근 처리
-// ------------------------------
-useEffect(() => {
-  if (window.location.pathname === "/email-verified") {
-    setCurrentStep("email-verified");
-  }
-}, []);
+  // ⏱ 로그인 1시간 자동 로그아웃
+  // ------------------------------
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const loginTime = localStorage.getItem("loginTime");
+    if (!loginTime) return;
+
+    const ONE_HOUR = 60 * 60 * 1000;
+    const elapsed = Date.now() - Number(loginTime);
+
+    // 이미 1시간 초과
+    if (elapsed >= ONE_HOUR) {
+      handleLogout();
+      return;
+    }
+
+    // 남은 시간 후 자동 로그아웃
+    const timeout = setTimeout(() => {
+      handleLogout();
+    }, ONE_HOUR - elapsed);
+
+    return () => clearTimeout(timeout);
+  }, [isAuthenticated]);
+
 
   
   // ------------------------------
@@ -335,10 +353,10 @@ useEffect(() => {
   //   네비게이션 / 뒤로가기 처리
   // ------------------------------
   const navigateToStep = (newStep: AppStep, addToHistory = true) => {
-    // ✅ voice-assistant를 떠나는 순간 초기화
+    /* ✅ voice-assistant를 떠나는 순간 초기화
     if (currentStep === "voice-assistant" && newStep !== "voice-assistant") {
       resetCookingContext();
-    }
+    }*/
 
     if (addToHistory && currentStep !== "auth" && currentStep !== newStep) {
       setPageHistory((prev) => [...prev, currentStep]);
@@ -429,6 +447,7 @@ try {
     sessionStorage.removeItem("cooking_assistant_current_user");
     localStorage.removeItem("cooking_assistant_user_profile");
     localStorage.removeItem("cooking_assistant_completed_recipes"); 
+    localStorage.removeItem("loginTime"); // ⭐ 추가
     removeAuthToken();
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -967,15 +986,6 @@ const handleCompletedRecipeClick = async (recipe: CompletedRecipe) => {
           <Auth onAuthSuccess={handleAuthSuccess} />
         )}
 
-        {/* ✅ 이메일 인증 완료 */}
-        {currentStep === "email-verified" && (
-          <EmailVerified
-            onGoLogin={() => {
-              window.history.replaceState({}, "", "/");
-              setCurrentStep("auth");
-            }}
-          />
-        )}
 
         {/* 홈 */}
         {currentStep === "home" && isAuthenticated && (
@@ -1087,7 +1097,10 @@ const handleCompletedRecipeClick = async (recipe: CompletedRecipe) => {
 
         {/* 계정 설정 */}
         {currentStep === "account-settings" && (
-          <AccountSettings onBack={handleBackNavigation} />
+          <AccountSettings
+        onBack={handleBackNavigation}
+        onAccountDeleted={handleLogout}
+        />
         )}
 
         {/* 리뷰 */}
@@ -1130,7 +1143,7 @@ const handleCompletedRecipeClick = async (recipe: CompletedRecipe) => {
             setCurrentStep("home");
           }}
           onRecipeClick={() => navigateToStep("recipe-list")}
-          onAIClick={openVoiceAssistantFresh}
+          onAIClick={() => navigateToStep("voice-assistant")}
 
           onIngredientsClick={() =>
             navigateToStep("ingredients-management")
