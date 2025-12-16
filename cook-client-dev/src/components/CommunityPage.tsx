@@ -18,6 +18,7 @@ import { Input } from "./ui/input";
 import { getSavedRecipes, saveRecipe,removeSavedRecipe } from "../utils/api";
 import { getCompletedRecipeById } from "../utils/api";
 
+
 function HideOnErrorImage({
   src,
   alt,
@@ -56,6 +57,7 @@ export interface CommunityReview {
 
   bookmark_count?: number;
   recipe_image?: string | null;
+  comment_count?: number; // ✅ 추가
 }
 
 interface Comment {
@@ -92,6 +94,11 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
     "all"
   );
   const [savedRecipeIds, setSavedRecipeIds] = useState<Set<string>>(new Set());
+
+  const currentUser = JSON.parse(
+    sessionStorage.getItem("cooking_assistant_current_user") || "{}"
+  );
+
 
   // =======================
   // 초기 로딩
@@ -143,6 +150,29 @@ export function CommunityPage({ onGoToSaved, onRefreshSaved }: CommunityPageProp
     const data = await res.json();
     setComments((prev) => ({ ...prev, [reviewId]: data }));
   };
+
+  // =======================
+  // 🔄 댓글 폴링 (열려있는 댓글만 5초마다 갱신)
+  // =======================
+  useEffect(() => {
+    // 1️⃣ 현재 열려 있는 리뷰 id들만 추출
+    const openReviewIds = Object.entries(showComments)
+      .filter(([_, isOpen]) => isOpen)
+      .map(([reviewId]) => reviewId);
+
+    // 댓글 열린 게 하나도 없으면 폴링 안 함
+    if (openReviewIds.length === 0) return;
+
+    const interval = setInterval(() => {
+      openReviewIds.forEach((reviewId) => {
+        loadComments(reviewId);
+      });
+    }, 5000); // ⏱ 5초마다
+
+    // cleanup
+    return () => clearInterval(interval);
+  }, [showComments]);
+
 
   // =======================
   // 저장된 레시피 불러오기
@@ -215,17 +245,33 @@ const getTimeAgo = (dateString: string) => {
   // =======================
   // 댓글 추가
   const addComment = async (reviewId: string) => {
-  const text = commentInput[reviewId];
-  if (!text) return;
+    const text = commentInput[reviewId];
+    if (!text) return;
 
-  const token = sessionStorage.getItem("cooking_assistant_auth_token");
-  const currentUser = JSON.parse(
-    sessionStorage.getItem("cooking_assistant_current_user") || "{}"
-  );
+    const token = sessionStorage.getItem("cooking_assistant_auth_token");
+    const currentUser = JSON.parse(
+      sessionStorage.getItem("cooking_assistant_current_user") || "{}"
+    );
 
-  await fetch(
-    `/api/community/${reviewId}/comments`,
-    {
+    // ✅ 1. UI에 즉시 추가
+    const tempComment: Comment = {
+      id: "temp-" + Date.now(),
+      review_id: reviewId,
+      user_name: currentUser.name,
+      user_initial: currentUser.name?.slice(0, 1) ?? "?",
+      text,
+      created_at: new Date().toISOString(),
+    };
+
+    setComments((prev) => ({
+      ...prev,
+      [reviewId]: [...(prev[reviewId] || []), tempComment],
+    }));
+
+    setCommentInput((prev) => ({ ...prev, [reviewId]: "" }));
+
+    // ✅ 2. 서버 전송
+    await fetch(`/api/community/${reviewId}/comments`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -236,12 +282,22 @@ const getTimeAgo = (dateString: string) => {
         userName: currentUser.name,
         userInitial: currentUser.name?.slice(0, 1) ?? "?",
       }),
-    }
-  );
+    });
 
-  setCommentInput((prev) => ({ ...prev, [reviewId]: "" }));
-  await loadComments(reviewId);
-};
+    // ✅ 3. 서버 기준으로 다시 동기화 (id 보정)
+    await loadComments(reviewId);
+
+    // ✅ 댓글 수 +1 즉시 반영
+    setReviews(prev =>
+      prev.map(r =>
+        r.id === reviewId
+          ? { ...r, comment_count: (r.comment_count ?? 0) + 1 }
+          : r
+      )
+    );
+
+  };
+
 
 const handleDeleteComment = async (reviewId: string, commentId: string) => {
   if (!confirm("이 댓글을 삭제할까요?")) return;
@@ -265,6 +321,13 @@ const handleDeleteComment = async (reviewId: string, commentId: string) => {
     console.error("❌ 댓글 삭제 실패:", err);
     alert("댓글 삭제에 실패했습니다.");
   }
+  setReviews(prev =>
+  prev.map(r =>
+    r.id === reviewId
+      ? { ...r, comment_count: Math.max((r.comment_count ?? 1) - 1, 0) }
+      : r
+  )
+);
 };
 
 
@@ -511,7 +574,7 @@ const handleSaveRecipe = async (review: CommunityReview) => {
                       className="flex items-center gap-2 text-muted-foreground"
                     >
                       <MessageCircle className="w-5 h-5" />
-                      댓글 {reviewComments.length}
+                      댓글 {review.comment_count ?? reviewComments.length}
                     </button>
 
                     <button
@@ -552,12 +615,14 @@ const handleSaveRecipe = async (review: CommunityReview) => {
                               <p className="text-sm">{c.user_name}</p>
 
                               {/* ✅ 댓글 삭제 버튼 (본인만 클릭 가능하게 하려면 추가 조건 가능) */}
-                              <button
-                                onClick={() => handleDeleteComment(review.id, c.id)}
-                                className="text-xs text-red-500 hover:underline"
-                              >
-                                삭제
-                              </button>
+                              {c.user_name === currentUser?.name && (
+                                <button
+                                  onClick={() => handleDeleteComment(review.id, c.id)}
+                                  className="text-xs text-red-500 hover:underline"
+                                >
+                                  삭제
+                                </button>
+                              )}
                             </div>
 
                             <p className="text-xs whitespace-pre-wrap">{c.text}</p>
@@ -574,6 +639,12 @@ const handleSaveRecipe = async (review: CommunityReview) => {
                               [review.id]: e.target.value,
                             }))
                           }
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                              e.preventDefault();          // 폼 submit / 줄바꿈 방지
+                              addComment(review.id);       // ✅ Enter로 등록
+                            }
+                          }}
                           className="
                             border border-border 
                             bg-muted/40 

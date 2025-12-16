@@ -164,17 +164,20 @@ export function ProfileSetup({ onComplete, onBack, initialProfile }: ProfileSetu
     <div className="min-h-screen bg-background pt-20 pb-24">
       <div className="max-w-3xl mx-auto px-4 py-6">
 
-        <h1 className="mb-2">요리 프로필 설정</h1>
-        <p className="text-muted-foreground mb-6">
+        <h1 className="mb-2 text-2xl font-bold">
+          요리 프로필 설정
+        </h1>
+        <p className="mb-6 text-sm text-muted-foreground">
           당신에게 맞는 레시피를 추천하기 위해 몇 가지 정보를 알려주세요.
         </p>
+
 
         {/* ------------------------------------------------------------- */}
         {/* 선호 음식 */}
         {/* ------------------------------------------------------------- */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>선호 음식</CardTitle>
+            <CardTitle className="font-semibold">선호 음식</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -203,7 +206,7 @@ export function ProfileSetup({ onComplete, onBack, initialProfile }: ProfileSetu
         {/* ------------------------------------------------------------- */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>알러지 정보</CardTitle>
+            <CardTitle className="font-semibold">알러지 정보</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
 
@@ -295,7 +298,7 @@ export function ProfileSetup({ onComplete, onBack, initialProfile }: ProfileSetu
         {/* ------------------------------------------------------------- */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>싫어하는 재료</CardTitle>
+            <CardTitle className="font-semibold">싫어하는 재료</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
 
@@ -387,7 +390,7 @@ export function ProfileSetup({ onComplete, onBack, initialProfile }: ProfileSetu
         {/* ------------------------------------------------------------- */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>사용 가능한 조리도구</CardTitle>
+            <CardTitle className="font-semibold">사용 가능한 조리도구</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {Object.entries(toolCategories).map(([category, tools]) => (
@@ -419,7 +422,7 @@ export function ProfileSetup({ onComplete, onBack, initialProfile }: ProfileSetu
         {/* 식단 제한 */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>식단 제한 사항</CardTitle>
+            <CardTitle className="font-semibold">식단 제한 사항</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -446,7 +449,7 @@ export function ProfileSetup({ onComplete, onBack, initialProfile }: ProfileSetu
         {/* 건강 상태 */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>건강 상태</CardTitle>
+            <CardTitle className="font-semibold">건강 상태</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

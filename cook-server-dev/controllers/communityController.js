@@ -10,12 +10,15 @@ export const getCommunityReviews = async (req, res) => {
       SELECT 
         c.*,
         r.image_large AS recipe_image,   -- ✅ 원본 레시피 이미지 추가
-        COUNT(sr.id) AS bookmark_count
+        COUNT(sr.id) AS bookmark_count,
+        COUNT(DISTINCT cc.id) AS comment_count
       FROM community_reviews c
       LEFT JOIN recipes r
         ON c.recipe_id = r.id
       LEFT JOIN saved_recipes sr 
         ON c.recipe_id = sr.recipe_id
+      LEFT JOIN community_comments cc           -- ⭐ 댓글 테이블 조인
+        ON c.id = cc.review_id
       GROUP BY c.id
       ORDER BY bookmark_count DESC
     `);

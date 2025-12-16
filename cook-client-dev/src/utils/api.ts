@@ -56,8 +56,13 @@ async function apiCall(
   } catch {}
 
   if (!response.ok) {
-    throw new Error(data.error || data.message || "API 요청 실패");
+    const error: any = new Error(
+      data.error || data.message || "API 요청 실패"
+    );
+    error.status = response.status; // ⭐ 핵심
+    throw error;
   }
+
 
   return data;
 }
@@ -77,6 +82,18 @@ export async function login(email: string, password: string) {
   return apiCall(
     "/auth/login",
     { method: "POST", body: JSON.stringify({ email, password }) },
+    false
+  );
+}
+
+// 🔽 여기 추가
+export async function resendVerification(email: string) {
+  return apiCall(
+    "/auth/resend-verification",
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    },
     false
   );
 }
@@ -200,8 +217,38 @@ export async function addCompletedRecipe(payload: any) {
 
 export async function getCompletedRecipes() {
   const res = await apiCall("/completed-recipes", {}, true);
-  return res.recipes || [];
+
+  return (res.recipes || []).map((r: any) => ({
+    // 🔥 기준 ID 통일: recipe_id
+    id: r.recipe_id,
+    name: r.name,
+    image: r.image,
+    description: r.description,
+    category: r.category,
+    cooking_method: r.cooking_method,
+    hashtags: r.hashtags,
+
+    ingredients: Array.isArray(r.ingredients_json)
+      ? r.ingredients_json
+      : typeof r.ingredients_json === "string"
+      ? JSON.parse(r.ingredients_json)
+      : [],
+
+    steps: Array.isArray(r.steps_json)
+      ? r.steps_json
+      : typeof r.steps_json === "string"
+      ? JSON.parse(r.steps_json)
+      : [],
+
+    cookingTime: r.cooking_time,
+    servings: r.servings,
+    difficulty: r.difficulty,
+
+    // 🔥🔥🔥 이 한 줄이 모든 문제의 원인
+    completedAt: r.completed_at,
+  }));
 }
+
 
 // ===============================
 // PUBLIC RECIPES

@@ -18,7 +18,7 @@ import completedRecipesRoutes from './routes/completedRecipes.js';
 import communityRoutes from "./routes/community.js";
 import savedRoutes from "./routes/saved.js";
 
-import cors from "cors";
+
 
 
 dotenv.config();

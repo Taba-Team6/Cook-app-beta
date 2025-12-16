@@ -129,6 +129,10 @@ export function VoiceAssistant({
   const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
   const [timerRunning, setTimerRunning] = useState(false);
   const timerRef = useRef<any>(null);
+
+  // 🔥 타이머 대기 상태 (추가)
+const [pendingTimerSeconds, setPendingTimerSeconds] = useState<number | null>(null);
+
   //이거 추가
   const [originalTimerSeconds, setOriginalTimerSeconds] = useState<number | null>(null);
 
@@ -398,13 +402,20 @@ useEffect(() => {
   // ===============================
   const handleStepStart = (stepText: string) => {
     const sec = extractSecondsFromText(stepText);
+
     if (sec) {
-      addMessage(` ${sec}초 타이머를 시작할게요!`, "assistant");
-      startTimer(sec);
+      setPendingTimerSeconds(sec);
+
+      addMessage(
+        `⏱️ ${sec}초가 필요한 단계예요.\n타이머를 시작하려면 "타이머 시작해줘"라고 말해주세요.`,
+        "assistant"
+      );
     } else {
+      setPendingTimerSeconds(null);
       stopTimer();
     }
   };
+
 
   //여기 수정
   // ===============================
@@ -454,6 +465,36 @@ useEffect(() => {
       if (!text) return;
 
       addMessage(text, "user");
+
+      // ===============================
+      // 🔥 타이머 시작 음성 명령 처리 (최우선)
+      // ===============================
+      if (
+        pendingTimerSeconds &&
+        !timerRunning &&
+        ["타이머시작", "타이머 시작", "시작해", "시작"].some((k) =>
+          text.replace(/\s/g, "").includes(k)
+        )
+      ) {
+        startTimer(pendingTimerSeconds);
+        setPendingTimerSeconds(null);
+
+        addMessage("⏱️ 타이머를 시작했어요!", "assistant");
+        return;
+      }
+
+      if (
+        pendingTimerSeconds &&
+        ["타이머취소", "타이머 취소", "안할래", "취소"].some((k) =>
+          text.replace(/\s/g, "").includes(k)
+        )
+      ) {
+        setPendingTimerSeconds(null);
+        addMessage("⏱️ 타이머를 취소했어요.", "assistant");
+        return;
+      }
+
+
 
       // 🟦 0단계: 이미 "어떤 재료로 대체할까요?" 단계라면 여기서 먼저 처리
       if (awaitingReplacementChoice && replacementMode && recipeInfoRef.current) {
@@ -899,7 +940,7 @@ useEffect(() => {
 
   console.log("[wake] result:", text, "=>", normalized);
   // 여러 개 웨이크워드 허용
-  const wakeWords = ["안녕", "시작", "요리야", "요리도우미", "헤이요리"];
+  const wakeWords = ["두콩아"];
 
   if (wakeWords.some((word) => normalized.includes(word))) {
     console.log("[wake] 웨이크워드 감지 → command 모드로 전환");
@@ -1274,7 +1315,7 @@ useEffect(() => {
                   {isListening
                     ? "지금 말씀하세요..."
                     : isWakeActive
-                    ? `"안녕"이라고 불러보세요`
+                    ? `두콩아"이라고 불러보세요`
                     : "자동 듣기 켜기"}
                 </span>
               </div>

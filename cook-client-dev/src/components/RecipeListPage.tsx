@@ -253,7 +253,7 @@ export function RecipeListPage({
                   <p className="text-gray-600 truncate mr-2 text-xs">
                     {recipe.hashtags
                       ? `#${recipe.hashtags.split(",").map((tag) => tag.trim()).join(" #")}`
-                      : "해시태그 없음"}
+                      : ""}
                   </p>
                   <p className="text-[#465940] font-bold flex-shrink-0 text-xs">
                     재료: {recipe.ingredients_count}개

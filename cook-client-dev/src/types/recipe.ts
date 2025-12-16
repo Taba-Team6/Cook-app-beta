@@ -56,6 +56,10 @@ export interface CompletedRecipe {
   servings?: number | string | null;
   difficulty?: string | null;
 
+  // 🔥 DB 필드 (지금 App.tsx에서 쓰고 있음)
+  cooking_method?: string | null;
+  hashtags?: string | null;
+
   // 재료 / 단계
   ingredients?: {
     name: string;
@@ -67,3 +71,26 @@ export interface CompletedRecipe {
   completedAt: string;
 }
 
+// ✅ 완료 레시피 저장용 Payload (addCompletedRecipe에서 사용)
+export interface CompletedRecipePayload {
+  id: string;
+  name: string;
+  image: string | null;
+  description: string | null;
+  category: string | null;
+
+  cooking_method: string | null;
+  hashtags: string | null;
+
+  ingredients: {
+    name: string;
+    amount: string;
+  }[];
+
+  steps: string[];
+  completedAt: string;
+
+  cookingTime?: string | null;
+  servings?: string | null;
+  difficulty?: string | null;
+}

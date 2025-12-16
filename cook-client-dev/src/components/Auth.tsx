@@ -6,6 +6,8 @@ import { Label } from "./ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { ChefHat, Mail, Lock, User } from "lucide-react";
 import { signUp, login, setAuthToken } from "../utils/api";
+import { resendVerification } from "../utils/api";
+
 
 interface AuthProps {
   onAuthSuccess: (userName: string) => void;
@@ -102,8 +104,11 @@ export function Auth({ onAuthSuccess }: AuthProps) {
 
       const response = await login(signupEmail, signupPassword);
 
-      if (!response || !response.user) {
-        setError("회원가입은 완료되었으나 로그인에 실패했습니다.");
+      // ✅ 이메일 인증 필요 → 여기서 끝
+      if (result.needEmailVerification) {
+        setError(
+          "이메일로 인증 링크를 보냈습니다.\n이메일 인증 후 로그인해주세요."
+        );
         setActiveTab("login");
         setLoading(false);
         return;
@@ -124,10 +129,19 @@ export function Auth({ onAuthSuccess }: AuthProps) {
       onAuthSuccess(signupName);
       setLoading(false);
     } catch (err: any) {
-      console.error("Signup error:", err);
-      setError(err.message || "회원가입 중 오류가 발생했습니다");
+      console.error("Login error:", err);
+
+      if (err?.status === 403) {
+        setError(
+          "이메일로 인증 링크를 보냈습니다. \n인증 후 로그인해주세요."
+        );
+      } else {
+        setError("로그인 중 오류가 발생했습니다");
+      }
+
       setLoading(false);
     }
+
   };
 
   return (
@@ -165,7 +179,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
               fontWeight: "700",
             }}
           >
-            쿠킹 어시스턴트
+            쿠킹 메이트
           </h1>
 
           <p className="text-muted-foreground">AI가 도와주는 맞춤형 요리 가이드</p>
@@ -201,7 +215,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                         type="email"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
-                        placeholder="example@email.com"
+                        placeholder="이메일을 입력하세요"
                         className="pl-10"
                       />
                     </div>
@@ -230,6 +244,30 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                     </div>
                   )}
 
+                  {error && error.includes("이메일 인증") && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      disabled={loading || !loginEmail}
+                      onClick={async () => {
+                        try {
+                          setLoading(true);
+                          await resendVerification(loginEmail);
+                          setError(
+                            "인증 메일을 다시 보냈습니다.\n이메일을 확인해주세요."
+                          );
+                        } catch {
+                          setError("인증 메일 재전송 중 오류가 발생했습니다");
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    >
+                      인증 메일 다시 보내기
+                    </Button>
+                  )}
+
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "로그인 중..." : "로그인"}
                   </Button>
@@ -239,7 +277,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                     <button
                       type="button"
                       onClick={() => setActiveTab("signup")}
-                      className="text-primary hover:underline"
+                      className="text-sm text-primary hover:underline"
                     >
                       회원가입
                     </button>
@@ -287,7 +325,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                         type="email"
                         value={signupEmail}
                         onChange={(e) => setSignupEmail(e.target.value)}
-                        placeholder="example@email.com"
+                        placeholder="이메일을 입력하세요"
                         className="pl-10"
                       />
                     </div>
@@ -342,7 +380,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
                     <button
                       type="button"
                       onClick={() => setActiveTab("login")}
-                      className="text-primary hover:underline"
+                      className="text-sm text-primary hover:underline"
                     >
                       로그인
                     </button>
@@ -356,8 +394,9 @@ export function Auth({ onAuthSuccess }: AuthProps) {
 
         {/* 하단 약관 */}
         <div className="mt-6 text-center">
-          <p className="text-xs text-muted-foreground">
-            회원가입을 진행하면 서비스 이용약관 및 개인정보 처리방침에 동의하는 것으로 간주됩니다
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            회원가입을 진행하면 서비스 이용약관 및 개인정보 처리방침에<br />
+            동의하는 것으로 간주됩니다
           </p>
         </div>
 

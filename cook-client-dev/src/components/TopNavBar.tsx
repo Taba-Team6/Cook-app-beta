@@ -90,9 +90,6 @@ export function TopNavBar({
             <button
               onClick={onLogoClick}
               className="flex items-center gap-2.5 hover:opacity-80 transition-all relative px-3 py-2 rounded-xl"
-              style={{
-                boxShadow: "0 2px 6px rgba(70, 89, 64, 0.1)",
-              }}
             >
               {/* 3D 느낌 로고 (두 번째 코드 스타일 적용) */}
               <div
@@ -127,13 +124,7 @@ export function TopNavBar({
                     fontSize: "1.1rem",
                   }}
                 >
-                  쿠킹 어시스턴트
-                </span>
-                <span
-                  className="text-xs leading-tight hidden sm:block"
-                  style={{ color: "#7A8D6E", fontWeight: 500 }}
-                >
-                  AI 요리 비서
+                  쿠킹 메이트
                 </span>
               </div>
             </button>
@@ -149,7 +140,6 @@ export function TopNavBar({
               onClick={onToggleDarkMode}
               className="rounded-xl hover:bg-muted"
             >
-              {isDarkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
           )}
 
@@ -172,7 +162,7 @@ export function TopNavBar({
                 <div className="flex items-center gap-2 p-2">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm">{userName}</p>
-                    <p className="text-xs text-muted-foreground">쿠킹 어시스턴트</p>
+                    <p className="text-xs text-muted-foreground">쿠킹 메이트</p>
                   </div>
                 </div>
                 <DropdownMenuSeparator />

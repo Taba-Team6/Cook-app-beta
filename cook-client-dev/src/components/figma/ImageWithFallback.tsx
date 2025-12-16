@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Bot } from "lucide-react";
+import { ChefHat } from "lucide-react";
 
 export function ImageWithFallback({
   src,
@@ -16,7 +16,7 @@ export function ImageWithFallback({
         className={`flex items-center justify-center bg-muted ${className}`}
         style={style}
       >
-        <Bot className="w-10 h-10 text-primary/70" />
+        <ChefHat className="w-10 h-10 text-primary/70" />
       </div>
     );
   }

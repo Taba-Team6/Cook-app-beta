@@ -159,21 +159,22 @@ router.post('/', async (req, res) => {
 
 // ✅ 완료한 레시피 단건 조회 (ID로)
 // ✅ 완료한 레시피 단건 조회 (recipe_id 기준 단일 조회)
+// ✅ 완료한 레시피 단건 조회 (recipe_id 기준 + 로그인 유저 + 최신 1건)
 router.get("/:id", async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.params;      // 🔥 이게 recipe_id
+  const userId = req.user.id;
 
   try {
     const rows = await query(
       `
       SELECT *
       FROM completed_recipes
-      WHERE recipe_id = ?
+      WHERE recipe_id = ? AND user_id = ?
+      ORDER BY completed_at DESC
       LIMIT 1
       `,
-      [id]   // ✅ 파라미터 1개만 전달
+      [id, userId]
     );
-
-    console.log("✅ raw DB row:", rows[0]);
 
     if (!rows || rows.length === 0) {
       return res.status(404).json({ error: "레시피 없음" });
@@ -181,25 +182,21 @@ router.get("/:id", async (req, res) => {
 
     const r = rows[0];
 
-    // ✅ JSON 파싱 안전 처리
-    const ingredients = Array.isArray(r.ingredients_json)
-      ? r.ingredients_json
-      : typeof r.ingredients_json === "string"
+    const ingredients =
+      typeof r.ingredients_json === "string"
         ? JSON.parse(r.ingredients_json)
-        : [];
+        : r.ingredients_json ?? [];
 
-    const steps = Array.isArray(r.steps_json)
-      ? r.steps_json
-      : typeof r.steps_json === "string"
+    const steps =
+      typeof r.steps_json === "string"
         ? JSON.parse(r.steps_json)
-        : [];
-
+        : r.steps_json ?? [];
 
     res.setHeader("Cache-Control", "no-store");
 
     res.json({
       recipe: {
-        id: r.recipe_id,
+        id: r.recipe_id,          // 🔥 프론트 기준 ID 유지
         name: r.name,
         image: r.image,
         description: r.description,

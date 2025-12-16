@@ -245,7 +245,7 @@ export function IngredientsManagement({ onBack }: IngredientsManagementProps) {
   // ✅ 영수증 업로드 관련 상태
 const [isReceiptUploading, setIsReceiptUploading] = useState(false);
 const [receiptIngredients, setReceiptIngredients] = useState<
-  { name: string; quantity: string; unit: string; location: string }[]
+  { name: string; quantity: string; unit: string; location: string; expiryDate?: string }[]
 >([]);
 const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
 const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -271,12 +271,12 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
     try {
       const response = await getIngredients();
       // 백엔드에서 storage로 받아온 데이터를 location으로 변환
-      const ingredientsWithLocation = (response.ingredients || []).map(
-        (ing: any) => ({
-          ...ing,
-          location: ing.storage || ing.location || "실온", // storage → location 변환
-        }),
-      );
+      const ingredientsWithLocation = (response.ingredients || []).map((ing: any) => ({
+  ...ing,
+  location: ing.storage || ing.location || "실온",
+  expiryDate: ing.expiryDate || ing.expiry_date || null, // ✅ 핵심
+}));
+
 
       // Sort by expiry date (closest first)
       const sorted = ingredientsWithLocation.sort((a: any, b: any) => {
@@ -326,9 +326,7 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
         quantity: formData.quantity,
         unit: formData.unit,
         storage: formData.location, // location을 storage로 매핑
-        expiryDate: formData.expiryDate
-          ? formData.expiryDate.toISOString()
-          : undefined,
+        expiry_date: formData.expiryDate ? formData.expiryDate.toISOString().slice(0, 10) : null,
         notes: formData.notes,
       };
 
@@ -374,9 +372,7 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
         quantity: formData.quantity,
         unit: formData.unit,
         storage: formData.location, // location을 storage로 매핑
-        expiryDate: formData.expiryDate
-          ? formData.expiryDate.toISOString()
-          : undefined,
+        expiry_date: formData.expiryDate ? formData.expiryDate.toISOString().slice(0, 10) : null,
         notes: formData.notes,
       };
 
@@ -429,20 +425,23 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      setIsReceiptUploading(false); // 취소 시 복구
+      return;
+    }
 
-    setIsReceiptUploading(true);
-    setIsReceiptReady(false); // ✅ 새로 분석 시작하니까 초기화
-
+    setIsReceiptReady(false);
     try {
       const formData = new FormData();
       formData.append("image", file);
 
       const response = await parseReceiptImage(formData);
       const parsed = (response.ingredients || []).map((ing: any) => ({
-        ...ing,
-        location: "냉장실",   // ✅ 기본 보관 위치 자동 지정
+      ...ing,
+      location: "냉장실",
+      expiryDate: undefined, // ✅ 유통기한은 사용자가 달력으로 선택
       }));
+
 
       if (!parsed.length) {
         toast.error("영수증에서 식재료를 찾지 못했어요");
@@ -466,41 +465,46 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
 
   // ✅ 영수증 인식 결과 → 한 번에 저장
   const handleSaveReceiptIngredients = async () => {
-    if (!receiptIngredients.length) return;
+  if (!receiptIngredients.length) return;
 
-    setLoading(true);
-    try {
-      for (const ing of receiptIngredients) {
-        const ingredientData = {
-          name: ing.name,
-          category: categorizeIngredient(ing.name),
-          quantity: ing.quantity,
-          unit: ing.unit,
-          storage: ing.location,   // ✅ 항목마다 선택한 위치로 저장됨
-          expiryDate: undefined,
-          notes: "영수증 자동 등록",
-        };
+  setLoading(true);
+  try {
+    for (const ing of receiptIngredients) {
+      const payload = {
+        name: ing.name,
+        category: categorizeIngredient(ing.name),
+        quantity: ing.quantity,
+        unit: ing.unit,
+        storage: ing.location,
+        expiry_date: ing.expiryDate || null, // ✅ DB 컬럼명으로 저장
+        notes: "영수증 자동 등록",
+      };
 
-        const res = await addIngredient(ingredientData);
+      const response = await addIngredient(payload);
 
-        const newIngredient = {
-          ...res.ingredient,
-          location: res.ingredient.storage,
-        };
+      const saved = response.ingredient;
 
-        setIngredients((prev) => [...prev, newIngredient]);
-      }
+      const newIngredient = {
+        ...saved,
+        location: saved.storage || ing.location,
+        expiryDate: saved.expiry_date || ing.expiryDate || undefined,
+      };
 
-      toast.success("영수증 식재료 저장 완료");
-      setIsReceiptDialogOpen(false);
-      setReceiptIngredients([]);
-      setIsReceiptReady(false); // ✅ 저장 후엔 다시 처음 상태로
-    } catch (error) {
-      toast.error("식재료 저장 실패");
-    } finally {
-      setLoading(false);
+      setIngredients((prev) => [...prev, newIngredient]);
     }
-  };
+
+    toast.success("영수증 식재료 저장 완료");
+    setIsReceiptDialogOpen(false);
+    setReceiptIngredients([]);
+    setIsReceiptReady(false);
+  } catch (error) {
+    console.error(error);
+    toast.error("식재료 저장 실패");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
 
   const openEditDialog = (ingredient: Ingredient) => {
@@ -580,10 +584,9 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
               disabled={isReceiptUploading}
               onClick={() => {
                 if (isReceiptReady) {
-                  // ✅ 분석이 끝난 상태 → "확인하기" 눌렀을 때 다이얼로그 열기
                   setIsReceiptDialogOpen(true);
                 } else {
-                  // ✅ 아직 분석 전 → 파일 선택창 열기
+                  setIsReceiptUploading(true); // ⭐ 먼저 올림
                   fileInputRef.current?.click();
                 }
               }}
@@ -1230,35 +1233,84 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
                     <X className="w-4 h-4" />
                   </button>
 
-                  {/* ✅ 내용 영역 (X랑 안 겹치게 padding-right 확보) */}
-                  <div className="flex justify-between items-center pr-8">
-                    <span className="font-medium">{ing.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {ing.quantity} {ing.unit}
-                    </span>
-                  </div>
+                  {/* ✅ 내용 영역 (이름 수정 가능 + X랑 안 겹치게 padding-right 확보) */}
+                  <div className="flex justify-between items-center gap-2 pr-8">
+                  <Input
+                  value={ing.name}
+                  onChange={(e) => {
+                  const value = e.target.value;
+                  setReceiptIngredients((prev) =>
+                  prev.map((item, i) => (i === idx ? { ...item, name: value } : item))
+                  );
+                }}
+                className="h-9"
+                placeholder="재료 이름"
+                />
 
-                  <Select
-                    value={ing.location}
-                    onValueChange={(value: string) => {
-                      setReceiptIngredients(prev =>
-                        prev.map((item, i) =>
-                          i === idx ? { ...item, location: value } : item
-                        )
-                      );
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="보관 위치 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {LOCATIONS.map(loc => (
-                        <SelectItem key={loc.name} value={loc.name}>
-                          {loc.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">
+              {ing.quantity} {ing.unit}
+              </span>
+            </div>
+
+
+                  <div className="flex gap-2">
+  {/* 왼쪽: 보관 위치 */}
+  <Select
+    value={ing.location}
+    onValueChange={(value: string) => {
+      setReceiptIngredients((prev) =>
+        prev.map((item, i) => (i === idx ? { ...item, location: value } : item))
+      );
+    }}
+  >
+    <SelectTrigger className="flex-1">
+      <SelectValue placeholder="보관 위치" />
+    </SelectTrigger>
+    <SelectContent>
+      {LOCATIONS.map((loc) => (
+        <SelectItem key={loc.name} value={loc.name}>
+          {loc.name}
+        </SelectItem>
+      ))}
+    </SelectContent>
+  </Select>
+
+  {/* 오른쪽: 유통기한 (달력) */}
+  <Popover>
+    <PopoverTrigger asChild>
+      <Button variant="outline" className="flex-1 justify-start">
+        <CalendarIcon className="mr-2 h-4 w-4" />
+        {ing.expiryDate ? (
+          format(parseISO(ing.expiryDate), "yyyy.MM.dd", { locale: ko })
+        ) : (
+          <span className="text-muted-foreground">유통기한</span>
+        )}
+      </Button>
+    </PopoverTrigger>
+
+    <PopoverContent className="w-auto p-0" align="start">
+      <Calendar
+        mode="single"
+        selected={ing.expiryDate ? parseISO(ing.expiryDate) : undefined}
+        onSelect={(date: Date | undefined) => {
+          setReceiptIngredients((prev) =>
+            prev.map((item, i) =>
+              i === idx
+                ? {
+                    ...item,
+                    expiryDate: date ? format(date, "yyyy-MM-dd") : undefined,
+                  }
+                : item
+            )
+          );
+        }}
+        initialFocus
+        locale={ko}
+      />
+    </PopoverContent>
+  </Popover>
+      </div>
+
                 </div>
               ))}
 
@@ -1269,7 +1321,11 @@ const [isReceiptReady, setIsReceiptReady] = useState(false);
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setIsReceiptDialogOpen(false)}
+                onClick={() => {
+                setIsReceiptDialogOpen(false);
+                setIsReceiptReady(false);      // 🔥 핵심
+                setReceiptIngredients([]);     // 🔥 OCR 결과 초기화
+              }}
               >
                 취소
               </Button>
