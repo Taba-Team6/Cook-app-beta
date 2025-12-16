@@ -175,7 +175,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
             />
           </div>
 
-          <CardTitle className="text-2xl font-bold">쿠킹 메이트</CardTitle>
+          <CardTitle className="text-2xl font-bold">쿠킹메이트</CardTitle>
           <CardDescription>
             AI가 도와주는 맞춤형 요리 가이드
           </CardDescription>
