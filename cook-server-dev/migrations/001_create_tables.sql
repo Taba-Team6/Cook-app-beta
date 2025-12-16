@@ -8,6 +8,12 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(100) NOT NULL,
+
+    -- ✅ 이메일 인증 관련 컬럼 추가
+    is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    email_verify_token VARCHAR(255) NULL,
+    email_verify_expires DATETIME NULL,
+
     allergies JSON DEFAULT NULL,
     preferences JSON DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -15,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
     INDEX idx_email (email),
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 CREATE TABLE IF NOT EXISTS ingredients (
     id VARCHAR(36) PRIMARY KEY DEFAULT (UUID()),
