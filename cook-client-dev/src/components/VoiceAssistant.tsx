@@ -388,17 +388,17 @@ useEffect(() => {
 
   // ✅ sessionStorage에서 복원한 경우엔 메시지 다시 찍지 않음
   if (!didRestoreRef.current) {
-  if (lines.length > 0) {
-    addMessage(
-      `${title} 재료 목록입니다:\n${lines.join("\n")}\n\n빠진 재료가 있으면 말해주세요!`,
-      "assistant"
-    );
-  } else {
-    addMessage(
-      `${title} 레시피의 재료 정보를 불러오지 못했어요.\n필요한 재료를 말로 알려주시면 도와드릴게요!`,
-      "assistant"
-    );
-  }
+    if (recipeInfo) {
+      // 레시피 정보가 있을 때 (전체 레시피 출력 기능과 연동)
+      const stepSummary = recipeInfo.steps.map((s, idx) => `${idx + 1}. ${s.slice(0, 15)}...`).join("\n");
+      addMessage(
+        `[${title} 레시피 요약]\n\n■ 필요한 재료\n${lines.join("\n")}\n\n■ 조리 순서 요약\n${stepSummary}\n\n빠진 재료가 있나요? 없다면 "시작하자"라고 말씀해 주세요!`,
+        "assistant"
+      );
+    } else if (messages.length === 0) {
+      // 초기 진입 시 (아무 정보가 없을 때)
+      addMessage("안녕하세요! 어떤 요리를 도와드릴까요?\n원하는 요리를 말하거나 입력해 보세요!\n예: '김치볶음밥 알려줘'", "assistant");
+    }
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -461,7 +461,7 @@ useEffect(() => {
     if (!steps || steps.length === 0) return "요리 단계를 불러올 수 없어요.";
 
     const base = `[${i + 1}단계 / ${steps.length}단계]\n${steps[i]}`;
-    const guide = `\n\n완료하면 "다음"이라고 말해주세요.`;
+    const guide = `\n\n완료하면 "다음 단계" 또는 "다 했어"이라고 말해주세요.`;
 
     if (i === 0) return `좋습니다! 요리를 시작하겠습니다.\n\n${base}${guide}`;
     return `${base}${guide}`;
@@ -570,6 +570,21 @@ useEffect(() => {
       if (!text) return;
 
       addMessage(text, "user");
+
+      // [추가] "다음 단계" 강제 전환 로직 (서버 요청 전 가로채기)
+      if (cookingStarted && text.includes("다음단계")) {
+        const total = recipeInfoRef.current?.steps?.length ?? 0;
+        const next = currentStepIndexRef.current + 1;
+        if (next < total) {
+          setCurrentStepIndex(next);
+          addMessage(buildStepMessage(next, recipeInfoRef.current?.steps || []), "assistant");
+          handleStepStart(recipeInfoRef.current?.steps[next] || "");
+        } else {
+          setIsFinished(true);
+          addMessage("모든 단계가 끝났습니다! '요리 완료'를 눌러주세요.", "assistant");
+        }
+        return;
+      }
 
       // ===============================
       // 🔥 타이머 시작 음성 명령 처리 (최우선)
@@ -784,7 +799,7 @@ useEffect(() => {
         setCurrentStepIndex(0);
         setReplacementMode(null);
         setAwaitingReplacementChoice(false);
-        addMessage("모든 재료가 준비되었군요! 요리를 시작할까요?", "assistant");
+        addMessage("모든 재료가 준비되었군요!\n조리를 시작하려면 \"시작하자\"라고 말씀해 주세요.", "assistant");
         return;
       }
 
@@ -1322,6 +1337,13 @@ useEffect(() => {
       ? Math.round((completedCount / totalForProgress) * 100)
       : 0;
 
+  const renderHints = () => {
+    if (!recipeInfo) return ["김치볶음밥 알려줘", "된장찌개 레시피"];
+    if (!ingredientsChecked) return ["빠진 재료 없어", "재료 다 있어", "대파 대신 쪽파 돼?"];
+    if (!cookingStarted) return ["시작하자", "조리 시작해줘"];
+    if (cookingStarted && !isFinished) return ["다음", "다 했어", "다시 설명해줘"];
+    return [];
+  };
 
   // ===============================
   // UI
@@ -1343,8 +1365,9 @@ useEffect(() => {
                   {recipeInfo?.recipeName ?? recipeInfo?.name ?? "AI 음성 요리 도우미"}
                 </h2>
 
+                {/* AI 음성 요리 도우미 하단 글씨 */}
                 <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">
-                  원하는 요리를 말하거나 입력해보세요!{"\n"}예: "김치볶음밥 알려줘"
+                  원하는 요리에 대한 레시피를 안내받을 수 있어요! {"\n"}안내에 따라 요리보조를 시작해보세요!
                 </p>
 
                 {cookingStarted && recipeInfo && (
@@ -1476,6 +1499,18 @@ useEffect(() => {
                 ))}
                 <div ref={chatEndRef} />
               </ScrollArea>
+              {/* 힌트 칩 영역 추가 */}
+              <div className="flex gap-2 p-2 overflow-x-auto no-scrollbar border-t bg-muted/20">
+                {renderHints().map((hint) => (
+                  <button
+                    key={hint}
+                    onClick={() => handleUserInput(hint)}
+                    className="whitespace-nowrap px-3 py-1 rounded-full bg-white border text-xs hover:bg-primary/5 transition-colors"
+                  >
+                    {hint}
+                  </button>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
