@@ -388,17 +388,17 @@ useEffect(() => {
 
   // ✅ sessionStorage에서 복원한 경우엔 메시지 다시 찍지 않음
   if (!didRestoreRef.current) {
+    // 1. 레시피 정보가 새로 들어왔을 때 (메시지가 아직 요약본을 뿌리기 전일 때)
     if (recipeInfo && messages.length <= 1) {
-      // 조리 단계 요약 생성
-      const stepSummary = recipeInfo.steps
-        .map((s, idx) => `${idx + 1}. ${s.slice(0, 15)}...`)
-        .join("\n");
-
+      // slice를 제거하여 원본 단계를 모두 표시
+      const stepSummary = recipeInfo.steps.map((s, idx) => `${idx + 1}. ${s}`).join("\n");
       addMessage(
-        `[${title} 레시피 안내]\n\n■ 필요한 재료\n${lines.join("\n")}\n\n■ 조리 순서 요약\n${stepSummary}\n\n빠진 재료가 있나요? 없다면 "조리 시작"이라고 말씀해 주세요!`,
+        `[${title} 레시피 안내]\n\n■ 필요한 재료\n${lines.join("\n")}\n\n■ 조리 순서 안내\n\n${stepSummary}\n\n빠진 재료가 있나요? 없다면 "조리 시작"이라고 말씀해 주세요!`,
         "assistant"
       );
-    } else if (!recipeInfo && messages.length === 0) {
+    } 
+    // 2. 레시피도 없고 메시지도 아예 없을 때 (완전 초기 진입)
+    else if (!recipeInfo && messages.length === 0) {
       addMessage("안녕하세요! 어떤 요리를 도와드릴까요?\n원하는 요리를 말하거나 입력해 보세요!", "assistant");
     }
   }
@@ -717,36 +717,60 @@ useEffect(() => {
     console.log("[VOICE DEBUG] ======================================");
 
     //addMessage(text, "user");
+    const isReRequest = text.includes("다시") || text.includes("레시피") || text.includes("조리하고싶어");
 
-    // ===== 1) 처음 레시피 생성 =====
-    if (!recipeInfoLocal) {
+    if (!recipeInfoLocal || isReRequest) {
       try {
         const json = await askGPT_raw({ message: text, profile: userProfile });
         const info = JSON.parse(json);
 
-        if (!info.steps || !info.fullIngredients) throw new Error();
-
-        if (!info.category) {
-          info.category = "AI 레시피";
+        // 1. AI의 거절 메시지(가드레일)나 단순 인사말이 있다면 그것만 출력
+        if (info.assistantMessage) {
+          addMessage(info.assistantMessage, "assistant");
+          
+          // ★ 중요: 거절 메시지가 왔고 실제 레시피 데이터가 없다면 여기서 중단 (빈 틀 출력 방지)
+          if (!info.steps || info.steps.length === 0) {
+            return; 
+          }
         }
 
-        setRecipeInfo(info);
-        addMessage(
-          `${info.recipeName ?? ""} 재료 목록입니다:\n${info.fullIngredients.join(
-            "\n"
-          )}\n\n빠진 재료가 있으면 말해주세요!`,
-          "assistant"
-        );
-      } catch {
-        addMessage("레시피를 불러오지 못했어요!", "assistant");
+        // 2. 실제 레시피 데이터(단계와 재료)가 있는 경우에만 상세 안내 출력
+        if (info.steps && info.steps.length > 0 && info.fullIngredients) {
+          if (isReRequest) {
+            setCookingStarted(false);
+            setIngredientsChecked(false);
+            setCurrentStepIndex(0);
+            setCompletedSteps([]);
+          }
+
+          setRecipeInfo(info);
+          
+          const fullStepsText = info.steps
+            .map((s: string, i: number) => `${i + 1}. ${s}`)
+            .join("\n");
+
+          const title = info.recipeName ?? "요청하신 요리";
+
+          addMessage(
+            `[${title} 레시피 안내]\n\n■ 필요한 재료\n${info.fullIngredients.join("\n")}\n\n■ 상세 조리 순서\n\n${fullStepsText}\n\n빠진 재료가 있나요? 없다면 "조리 시작"이라고 말씀해 주세요!`,
+            "assistant"
+          );
+        }
+      } catch (err) {
+        console.error("Recipe Creation Error:", err);
+        if (!text.includes("다시")) {
+          addMessage("레시피를 불러오지 못했어요. 요리 이름을 정확히 말씀해 주세요!", "assistant");
+        }
       }
       return;
     }
 
+    if (!recipeInfoLocal) return;
+
     const nowRecipe =
-      typeof recipeInfoLocal === "string"
-        ? JSON.parse(recipeInfoLocal)
-        : recipeInfoLocal;
+    recipeInfoLocal && typeof recipeInfoLocal === "string"
+      ? JSON.parse(recipeInfoLocal)
+      : recipeInfoLocal;
 
     // ✅ 우선순위 0: 이미 요리 중일 때의 '다음/계속'은 무조건 "다음 단계"로 처리
     const compact = text.replace(/\s/g, "");

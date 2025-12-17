@@ -15,9 +15,15 @@ export const chatWithGPT = async (req, res) => {
 
     const forbiddenKeywords = ["주식", "정치", "비트코인", "게임", "욕설"];
       if (forbiddenKeywords.some(kw => message.includes(kw))) {
-        return res.json({ reply: JSON.stringify({ 
-          assistantMessage: "죄송합니다. 요리와 관련 없는 질문에는 답변을 드릴 수 없습니다." 
-        })});
+        return res.json({ 
+          reply: JSON.stringify({ 
+            assistantMessage: "죄송합니다. 저는 요리 보조 AI로서 요리와 관련된 질문에만 답변해 드릴 수 있습니다.",
+            // 👈 recipe 관련 필드들을 null 혹은 빈 값으로 명시하여 클라이언트 에러 방지
+            recipeName: null,
+            fullIngredients: null,
+            steps: null 
+          })
+        });
       }
     if (!message || message.trim() === "") {
       return res.status(400).json({ error: "message is required" });
