@@ -388,16 +388,18 @@ useEffect(() => {
 
   // ✅ sessionStorage에서 복원한 경우엔 메시지 다시 찍지 않음
   if (!didRestoreRef.current) {
-    if (recipeInfo) {
-      // 레시피 정보가 있을 때 (전체 레시피 출력 기능과 연동)
-      const stepSummary = recipeInfo.steps.map((s, idx) => `${idx + 1}. ${s.slice(0, 15)}...`).join("\n");
+    if (recipeInfo && messages.length <= 1) {
+      // 조리 단계 요약 생성
+      const stepSummary = recipeInfo.steps
+        .map((s, idx) => `${idx + 1}. ${s.slice(0, 15)}...`)
+        .join("\n");
+
       addMessage(
-        `[${title} 레시피 요약]\n\n■ 필요한 재료\n${lines.join("\n")}\n\n■ 조리 순서 요약\n${stepSummary}\n\n빠진 재료가 있나요? 없다면 "시작하자"라고 말씀해 주세요!`,
+        `[${title} 레시피 안내]\n\n■ 필요한 재료\n${lines.join("\n")}\n\n■ 조리 순서 요약\n${stepSummary}\n\n빠진 재료가 있나요? 없다면 "조리 시작"이라고 말씀해 주세요!`,
         "assistant"
       );
-    } else if (messages.length === 0) {
-      // 초기 진입 시 (아무 정보가 없을 때)
-      addMessage("안녕하세요! 어떤 요리를 도와드릴까요?\n원하는 요리를 말하거나 입력해 보세요!\n예: '김치볶음밥 알려줘'", "assistant");
+    } else if (!recipeInfo && messages.length === 0) {
+      addMessage("안녕하세요! 어떤 요리를 도와드릴까요?\n원하는 요리를 말하거나 입력해 보세요!", "assistant");
     }
   }
 
@@ -566,19 +568,25 @@ useEffect(() => {
   // 🔥 핵심: 음성 입력도 텍스트 입력과 100% 동일 처리
   // ===============================
     async function handleUserInput(rawText: string) {
+      const ingredientsChecked = ingredientsCheckedRef.current;
+      const cookingStarted = cookingStartedRef.current;
+      const currentStepIndex = currentStepIndexRef.current;
+      const recipeInfoLocal = recipeInfoRef.current;
+      const completedSteps = completedStepsRef.current;
+
       const text = normalizeText(rawText);
       if (!text) return;
 
       addMessage(text, "user");
 
       // [추가] "다음 단계" 강제 전환 로직 (서버 요청 전 가로채기)
-      if (cookingStarted && text.includes("다음단계")) {
-        const total = recipeInfoRef.current?.steps?.length ?? 0;
-        const next = currentStepIndexRef.current + 1;
+      if (cookingStarted && (text.includes("다음단계") || text.includes("다음 단계"))) {
+        const total = recipeInfoLocal?.steps?.length ?? 0;
+        const next = currentStepIndex + 1;
         if (next < total) {
           setCurrentStepIndex(next);
-          addMessage(buildStepMessage(next, recipeInfoRef.current?.steps || []), "assistant");
-          handleStepStart(recipeInfoRef.current?.steps[next] || "");
+          addMessage(buildStepMessage(next, recipeInfoLocal?.steps || []), "assistant");
+          handleStepStart(recipeInfoLocal?.steps[next] || "");
         } else {
           setIsFinished(true);
           addMessage("모든 단계가 끝났습니다! '요리 완료'를 눌러주세요.", "assistant");
@@ -694,13 +702,6 @@ useEffect(() => {
         );
         return;
       }
-
-      // 🔥 항상 ref에 들어있는 "최신 상태"를 기준으로 처리
-      const ingredientsChecked = ingredientsCheckedRef.current;
-      const cookingStarted = cookingStartedRef.current;
-      const currentStepIndex = currentStepIndexRef.current;
-      const recipeInfoLocal = recipeInfoRef.current;
-      const completedSteps = completedStepsRef.current;
 
 
     console.log(
@@ -1499,18 +1500,6 @@ useEffect(() => {
                 ))}
                 <div ref={chatEndRef} />
               </ScrollArea>
-              {/* 힌트 칩 영역 추가 */}
-              <div className="flex gap-2 p-2 overflow-x-auto no-scrollbar border-t bg-muted/20">
-                {renderHints().map((hint) => (
-                  <button
-                    key={hint}
-                    onClick={() => handleUserInput(hint)}
-                    className="whitespace-nowrap px-3 py-1 rounded-full bg-white border text-xs hover:bg-primary/5 transition-colors"
-                  >
-                    {hint}
-                  </button>
-                ))}
-              </div>
             </div>
           </CardContent>
         </Card>
