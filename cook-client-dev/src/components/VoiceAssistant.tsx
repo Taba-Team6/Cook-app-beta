@@ -391,7 +391,7 @@ useEffect(() => {
     // 1. 레시피 정보가 새로 들어왔을 때 (메시지가 아직 요약본을 뿌리기 전일 때)
     if (recipeInfo && messages.length <= 1) {
       // slice를 제거하여 원본 단계를 모두 표시
-      const stepSummary = recipeInfo.steps.map((s, idx) => `${idx + 1}. ${s}`).join("\n");
+      const stepSummary = (recipeInfo?.steps ?? []).map((s, idx) => `${idx + 1}. ${s}`).join("\n");
       addMessage(
         `[${title} 레시피 안내]\n\n■ 필요한 재료\n${lines.join("\n")}\n\n■ 조리 순서 안내\n\n${stepSummary}\n\n빠진 재료가 있나요? 없다면 "조리 시작"이라고 말씀해 주세요!`,
         "assistant"
@@ -530,12 +530,19 @@ useEffect(() => {
   };
 
   // 채팅 초기화
-  const resetChat = () => {
+  const resetChat = (opts?: { silent?: boolean }) => {
+  // 0) 음성/마이크 완전 정리(요리 완료 때도 같이 정리되게)
+  try {
+    clearSilenceTimer();
+    stopAllListening();
+  } catch (e) {
+    console.error(e);
+  }
+
   // 1) 타이머 정리
   try {
     stopTimer();
   } catch (e) {
-    // stopTimer가 내부에서 예외 낼 가능성은 낮지만 안전하게
     console.error(e);
   }
   setPendingTimerSeconds(null);
@@ -552,16 +559,19 @@ useEffect(() => {
   setCompletedSteps([]);
   setIsFinished(false);
 
-  // 3) 대체재 흐름 초기화(너 파일에 있는 상태들)
+  // 3) 대체재 흐름 초기화
   setReplacementMode(null);
   setAwaitingReplacementChoice(false);
 
   // 4) 저장된 복원 데이터 삭제
   sessionStorage.removeItem(CHAT_SAVE_KEY);
 
-  // 5) 안내 메시지 1줄 남기기(원치 않으면 삭제 가능)
-  addMessage("채팅을 초기화했어요. 다시 요리를 말해줘!", "assistant");
+  // 5) 안내 메시지 (silent면 안 찍음)
+  if (!opts?.silent) {
+    addMessage("채팅을 초기화했어요. 다시 요리를 말해줘!", "assistant");
+  }
   };
+
 
   //여기 수정 427까지
   // ===============================
@@ -586,7 +596,7 @@ useEffect(() => {
         if (next < total) {
           setCurrentStepIndex(next);
           addMessage(buildStepMessage(next, recipeInfoLocal?.steps || []), "assistant");
-          handleStepStart(recipeInfoLocal?.steps[next] || "");
+          handleStepStart((recipeInfoLocal?.steps ?? [])[next] || "");
         } else {
           setIsFinished(true);
           addMessage("모든 단계가 끝났습니다! '요리 완료'를 눌러주세요.", "assistant");
@@ -1342,16 +1352,12 @@ useEffect(() => {
 
       // ✅ App.tsx에 완료 이벤트 전달 → 완료 목록 갱신
       onCookingComplete?.(recipeInfo);
-
+      resetChat({ silent: true });
     } catch (err) {
       console.error("❌ 완료 레시피 저장 실패:", err);
       toast.error("완료한 레시피 저장에 실패했습니다.");
     }
   };
-
-
-
-
 
   // ===============================
   // 진행률 계산
