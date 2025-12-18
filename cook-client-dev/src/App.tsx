@@ -152,6 +152,14 @@ export default function App() {
   // ⭐ 추가: 첫 로그인 온보딩 상태
   const [showOnboarding, setShowOnboarding] = useState(false);
 
+
+  useEffect(() => {
+    setTimeout(() => {
+      window.scrollTo(0, 0);
+    }, 0);
+  }, [currentStep]);
+
+
   // ------------------------------
   //   세션 확인 로직
   // ------------------------------
