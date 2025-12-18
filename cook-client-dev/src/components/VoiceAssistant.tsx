@@ -81,6 +81,20 @@ function extractSecondsFromText(stepText: string): number | null {
   return total > 0 ? total : null;
 }
 
+// 봇이 생각 중일 때 보여줄 점 애니메이션 컴포넌트 선언
+const TypingDots = () => {
+  const [dots, setDots] = useState(".");
+  useEffect(() => {
+    let step = 0;
+    const interval = setInterval(() => {
+      setDots([".", "..", "..."][step % 3]);
+      step++;
+    }, 400);
+    return () => clearInterval(interval);
+  }, []);
+  return <span>{dots}</span>;
+};
+
 // ===============================
 // Component
 // ===============================
@@ -577,7 +591,7 @@ useEffect(() => {
   // ===============================
   // 🔥 핵심: 음성 입력도 텍스트 입력과 100% 동일 처리
   // ===============================
-    async function handleUserInput(rawText: string) {
+    async function handleUserInput(rawText: string, opts?: { skipAddUserMsg?: boolean }) {
       const ingredientsChecked = ingredientsCheckedRef.current;
       const cookingStarted = cookingStartedRef.current;
       const currentStepIndex = currentStepIndexRef.current;
@@ -587,7 +601,10 @@ useEffect(() => {
       const text = normalizeText(rawText);
       if (!text) return;
 
-      addMessage(text, "user");
+      // skipAddUserMsg가 없을 때만 메시지 추가 (기존 로직 유지)
+      if (!opts?.skipAddUserMsg) {
+        addMessage(text, "user");
+      }
 
       // [추가] "다음 단계" 강제 전환 로직 (서버 요청 전 가로채기)
       if (cookingStarted && (text.includes("다음단계") || text.includes("다음 단계"))) {
@@ -1016,9 +1033,26 @@ useEffect(() => {
     setTextInput("");
     setIsProcessing(true);
 
+    // 1. 사용자 질문을 먼저 화면에 추가 (순서 보장)
+    const userMsgId = `user-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, type: "user", text: clean, timestamp: new Date() }
+    ]);
+
+    // 2. 봇 타이핑(...) 메시지 추가
+    const typingId = `bot-typing-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: typingId, type: "assistant", text: "__typing__", timestamp: new Date() }
+    ]);
+
     try {
-      await handleUserInput(clean);
+      // { skipAddUserMsg: true }를 전달하여 중복 생성을 막습니다.
+      await handleUserInput(clean, { skipAddUserMsg: true }); 
     } finally {
+      // 생각 중 메시지 제거
+      setMessages((prev) => prev.filter(m => m.id !== typingId));
       setIsProcessing(false);
     }
   };
@@ -1280,9 +1314,26 @@ useEffect(() => {
       setIsListening(false);
       commandRecognizerRef.current = null;
 
-      const trimmed = normalizeText(finalText);
-      if (trimmed.length > 0) {
-        await handleUserInput(trimmed);
+      const trimmedText = normalizeText(finalText); // 변수명 변경
+      if (trimmedText.length > 0) {
+        // 1. 사용자 메시지 추가
+        setMessages((prev) => [
+          ...prev,
+          { id: `user-voice-${Date.now()}`, type: "user", text: trimmedText, timestamp: new Date() }
+        ]);
+
+        // 2. 봇 생각 중 추가
+        const typingId = `bot-typing-${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          { id: typingId, type: "assistant", text: "__typing__", timestamp: new Date() }
+        ]);
+
+        try {
+          await handleUserInput(trimmedText, { skipAddUserMsg: true });
+        } finally {
+          setMessages((prev) => prev.filter(m => m.id !== typingId));
+        }
       }
 
       if (isWakeActiveRef.current && !hardErrorRef.current) {
@@ -1510,7 +1561,8 @@ useEffect(() => {
                         </div>
                         <div className="max-w-[75%]">
                           <div className="inline-block rounded-2xl rounded-bl-sm bg-white border border-gray-100 px-3 py-2 text-sm shadow-sm whitespace-pre-line">
-                            {m.text}
+                            {/* 수정: text가 __typing__이면 애니메이션 출력 */}
+                            {m.text === "__typing__" ? <TypingDots /> : m.text}
                           </div>
                         </div>
                       </>
