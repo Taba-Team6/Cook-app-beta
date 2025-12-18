@@ -130,7 +130,7 @@ export default function App() {
     email: string;
     name: string;
   } | null>(null);
-
+  const [voiceSessionKey, setVoiceSessionKey] = useState(1);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [selectedRecipe, setSelectedRecipe] = useState<RecipeDetailData | null>(
     null
@@ -577,6 +577,7 @@ const openVoiceAssistantFresh = () => {
 
 
   const handleStartCookingAssistant = (recipe: FullRecipe) => {
+    setVoiceSessionKey((k) => k + 1);
     setInitialAiRecipe(null);
     setSelectedFullRecipe(recipe);
     navigateToStep("voice-assistant");
@@ -1010,6 +1011,8 @@ const handleCompletedRecipeClick = async (recipe: CompletedRecipe) => {
             initialRecipeContext={selectedFullRecipe}
             initialRecipe={initialAiRecipe} 
             onCookingComplete={handleCookingCompleteFromAI}
+            sessionKey={voiceSessionKey}
+            onNewChat={() => setVoiceSessionKey((k) => k + 1)}
           />
         )}
 

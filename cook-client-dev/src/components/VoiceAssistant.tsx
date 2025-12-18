@@ -563,6 +563,7 @@ useEffect(() => {
     // 채팅 초기화
   const resetChat = () => {
     suppressAutoSaveRef.current = true;
+    didRestoreRef.current = false;
   // 1) 타이머 정리
   try {
     stopTimer();
