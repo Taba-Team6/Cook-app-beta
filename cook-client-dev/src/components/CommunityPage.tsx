@@ -586,13 +586,19 @@ const handleSaveRecipe = async (review: CommunityReview) => {
 
                     <button
                       onClick={() => handleSaveRecipe(review)}
-                      className={`flex items-center gap-2 ${
+                      className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-sm font-semibold transition-colors duration-200 ${
                         savedRecipeIds.has(review.recipe_id)
-                          ? "text-accent"
-                          : "text-muted-foreground"
+                          ? "text-green-700"  // ✅ 초록색 강조
+                          : "text-gray-400 hover:text-green-700"
                       }`}
                     >
-                      <Bookmark className="w-5 h-5" />
+                      <Bookmark
+                        className={`w-5 h-5 transition-all duration-200 ${
+                          savedRecipeIds.has(review.recipe_id)
+                            ? "stroke-green-700 fill-green-700"  // ✅ 아이콘도 초록
+                            : "stroke-gray-400"
+                        }`}
+                    />
                       저장 {review.bookmark_count ?? 0}
                     </button>
 
@@ -683,14 +689,18 @@ const handleSaveRecipe = async (review: CommunityReview) => {
     <div className="min-h-screen bg-background pt-16 pb-24">
       <div className="max-w-5xl mx-auto px-4 py-6">
         {/* 헤더 */}
-        <div className="mb-8 flex items-center gap-3">
-          <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center">
+        <div className="mb-8 flex items-start gap-4">
+          <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shrink-0">
             <Users className="w-6 h-6 text-white" />
           </div>
-          <div>
-            <h2>쿠킹 커뮤니티</h2>
-            <p className="text-sm text-muted-foreground">
-              레시피 후기를 공유하고 소통해요
+          <div className="flex-1">
+            <h2 className="text-xl font-semibold">쿠킹 커뮤니티</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              요리 후기와 꿀팁을 공유하고, 다른 사람의 레시피도 구경해보세요!
+            </p>
+            <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+              ※ 후기를 작성하려면 직접 요리를 완료해야 해요.<br />
+              AI 요리 보조를 통해 요리를 완료하면 글쓰기 기능이 열립니다.
             </p>
           </div>
         </div>

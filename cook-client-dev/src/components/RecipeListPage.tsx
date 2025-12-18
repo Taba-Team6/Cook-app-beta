@@ -62,9 +62,14 @@ export function RecipeListPage({
       setLoading(true);
       setError(null);
 
+      // ✅ 공백을 제거한 검색어 확인
+      const trimmedSearch = search.trim();
+
+
       const res = await getPublicRecipes({
         category: selectedCategory === "전체" ? undefined : selectedCategory,
-        search: search.length > 0 ? search : undefined,
+        // ✅ 검색어가 비어있지 않을 때만 search 파라미터 전달
+        search: trimmedSearch.length > 0 ? trimmedSearch : undefined,
         limit,
         offset,
       });
@@ -80,7 +85,7 @@ export function RecipeListPage({
 
   useEffect(() => {
     fetchRecipes();
-  }, [selectedCategory, search]);
+  }, [selectedCategory, search]); // 카테고리나 검색어가 바뀔 때마다 실행
 
   const isSaved = (id: string) => {
     return savedRecipes.some((r) => r.id === id);
@@ -94,56 +99,85 @@ export function RecipeListPage({
       {/* ✅ 카테고리 버튼 (올리브톤 + 아이콘 적용) */}
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-4">
     {CATEGORY_LIST.map((category, index) => {
-        const isSelected = selectedCategory === category.name;
-        const IconComponent = category.icon;
+            const isSelected = selectedCategory === category.name;
+            const IconComponent = category.icon;
 
-        return (
-        <button
-            key={index}
-            onClick={() => setSelectedCategory(category.name)}
-            className={`flex-shrink-0 px-4 py-2 rounded-full text-sm transition-all flex items-center gap-1.5 relative ${
-            isSelected
-                ? "text-white"
-                : "bg-card border text-foreground"
-            }`}
-            style={
-            isSelected
-                ? {
-                    background:
-                    "linear-gradient(135deg, #465940 0%, #5a6b4e 100%)",
-                    boxShadow:
-                    "0 3px 6px rgba(70, 89, 64, 0.25), 0 6px 12px rgba(70, 89, 64, 0.15)",
-                    border: "1px solid rgba(255, 255, 255, 0.1)",
-                }
-                : {
-                    border: "1px solid rgba(70, 89, 64, 0.2)",
-                    boxShadow: "0 2px 4px rgba(70, 89, 64, 0.08)",
-                }
-            }
-        >
-            {/* ✅ 선택된 버튼 상단 하이라이트 */}
-            {isSelected && (
-            <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/15 to-transparent rounded-t-full" />
-            )}
 
-            <IconComponent
-            className="w-4 h-4 relative z-10"
-            style={
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            return (
+            <button
+                key={index}
+                onClick={() => setSelectedCategory(category.name)}
+                className={`flex-shrink-0 px-4 py-2 rounded-full text-sm transition-all flex items-center gap-1.5 relative ${
                 isSelected
-                ? {
-                    filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2))",
+                    ? "text-white"
+                    : "bg-card border text-foreground"
+                }`}
+                style={
+                isSelected
+                    ? {
+                        background:
+                        "linear-gradient(135deg, #465940 0%, #5a6b4e 100%)",
+                        boxShadow:
+                        "0 3px 6px rgba(70, 89, 64, 0.25), 0 6px 12px rgba(70, 89, 64, 0.15)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
                     }
-                : {}
-            }
-            />
+                    : {
+                        border: "1px solid rgba(70, 89, 64, 0.2)",
+                        boxShadow: "0 2px 4px rgba(70, 89, 64, 0.08)",
+                    }
+                }
+            >
+                {/* ✅ 선택된 버튼 상단 하이라이트 */}
+                {isSelected && (
+                <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/15 to-transparent rounded-t-full" />
+                )}
 
-            <span className="relative z-10">
-            {category.name}
-            </span>
-        </button>
-        );
-    })}
-    </div>
+                <IconComponent
+                className="w-4 h-4 relative z-10"
+                style={
+                    isSelected
+                    ? {
+                        filter: "drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2))",
+                        }
+                    : {}
+                }
+                />
+
+                <span className="relative z-10">
+                {category.name}
+                </span>
+            </button>
+            );
+        })}
+      </div>
 
       {/* ✅ 검색 */}
       <div
@@ -253,7 +287,7 @@ export function RecipeListPage({
                   <p className="text-gray-600 truncate mr-2 text-xs">
                     {recipe.hashtags
                       ? `#${recipe.hashtags.split(",").map((tag) => tag.trim()).join(" #")}`
-                      : ""}
+                      : "해시태그 없음"}
                   </p>
                   <p className="text-[#465940] font-bold flex-shrink-0 text-xs">
                     재료: {recipe.ingredients_count}개

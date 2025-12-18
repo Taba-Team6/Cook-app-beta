@@ -51,6 +51,12 @@ router.get('/public', async (req, res) => {
       params.push('%' + category.trim() + '%');
     }
 
+    // ✅ [추가된 로직] search 필터 (이름 검색)
+    if (search && search.trim() !== '' && search !== 'undefined') {
+      queryStr += ' AND name LIKE ?';
+      params.push('%' + search.trim() + '%');
+    }
+
     // 🔐 limit / offset 숫자 강제 고정
 const safeLimit = Number.isInteger(limit) ? limit : 50;
 const safeOffset = Number.isInteger(offset) ? offset : 0;

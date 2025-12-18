@@ -14,7 +14,12 @@ import type { UserProfile } from "./ProfileSetup";
 import type { FullRecipe } from "./FoodRecipe";
 import { addCompletedRecipe } from "../utils/api";
 import { v4 as uuidv4 } from "uuid";
+
+
 const CHAT_SAVE_KEY = "voice_assistant_chat_state_v1";
+// ✅ 세션별 저장 키 (App.tsx에서 내려준 voiceSessionKey 사용)
+const getStorageKey = (sessionKey: number) =>
+  `${CHAT_SAVE_KEY}_${sessionKey}`;
 
 
 
@@ -27,7 +32,8 @@ interface VoiceAssistantProps {
   initialRecipe?: Recipe | null;
   userProfile: UserProfile | null;
   onCookingComplete?: (recipe: Recipe) => void;
-
+  onNewChat?: () => void;
+  sessionKey: number;
   // ★ FoodRecipe에서 넘어오는 전체 레시피(DB 기반)
   initialRecipeContext?: FullRecipe | null;
 }
@@ -81,6 +87,21 @@ function extractSecondsFromText(stepText: string): number | null {
   return total > 0 ? total : null;
 }
 
+// 봇이 생각 중일 때 보여줄 점 애니메이션 컴포넌트 선언
+const TypingDots = () => {
+  const [dots, setDots] = useState(".");
+  useEffect(() => {
+    let step = 0;
+    const interval = setInterval(() => {
+      setDots([".", "..", "..."][step % 3]);
+      step++;
+    }, 400);
+    return () => clearInterval(interval);
+  }, []);
+  return <span>{dots}</span>;
+};
+
+
 // ===============================
 // Component
 // ===============================
@@ -91,6 +112,8 @@ export function VoiceAssistant({
   userProfile,
   onCookingComplete,
   initialRecipeContext,
+  onNewChat,
+  sessionKey,
 }: VoiceAssistantProps) {
   // ====== 상태 ======
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -122,8 +145,12 @@ export function VoiceAssistant({
   const [isFinished, setIsFinished] = useState(false);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
+
   // ✅ sessionStorage에서 채팅을 복원했는지(초기화 useEffect가 덮어쓰지 않게)
   const didRestoreRef = useRef(false);
+  // ✅ resetChat 중 "빈 상태"가 다시 저장되는 걸 막기 위한 플래그
+  const suppressAutoSaveRef = useRef(false);
+
   // ===============================
   // 🔥 타이머 상태
   // ===============================
@@ -158,10 +185,12 @@ const [pendingTimerSeconds, setPendingTimerSeconds] = useState<number | null>(nu
   useEffect(() => {
     isWakeActiveRef.current = isWakeActive;
   }, [isWakeActive]);
+
   // ✅ 마운트 시: 이전 채팅 상태 복원
   useEffect(() => {
   try {
-    const raw = sessionStorage.getItem(CHAT_SAVE_KEY);
+    const STORAGE_KEY = getStorageKey(sessionKey);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return;
 
     const saved = JSON.parse(raw);
@@ -191,10 +220,12 @@ const [pendingTimerSeconds, setPendingTimerSeconds] = useState<number | null>(nu
   } catch (e) {
     console.error("채팅 상태 복원 실패:", e);
   }
-  }, []);
+  }, [sessionKey]);
   // ✅ 상태 변경 시 자동 저장
   useEffect(() => {
+    if (suppressAutoSaveRef.current) return;
   try {
+    const STORAGE_KEY = getStorageKey(sessionKey);
     const payload = {
       messages,
       recipeInfo,
@@ -207,7 +238,7 @@ const [pendingTimerSeconds, setPendingTimerSeconds] = useState<number | null>(nu
       pendingTimerSeconds,
       originalTimerSeconds,
     };
-    sessionStorage.setItem(CHAT_SAVE_KEY, JSON.stringify(payload));
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (e) {
     console.error("채팅 상태 저장 실패:", e);
   }
@@ -222,6 +253,7 @@ const [pendingTimerSeconds, setPendingTimerSeconds] = useState<number | null>(nu
   timerRunning,
   pendingTimerSeconds,
   originalTimerSeconds,
+  sessionKey,
   ]);
 
   // auto scroll
@@ -388,21 +420,20 @@ useEffect(() => {
 
   // ✅ sessionStorage에서 복원한 경우엔 메시지 다시 찍지 않음
   if (!didRestoreRef.current) {
-    // 1. 레시피 정보가 새로 들어왔을 때 (메시지가 아직 요약본을 뿌리기 전일 때)
-    if (recipeInfo && messages.length <= 1) {
-      // slice를 제거하여 원본 단계를 모두 표시
-      const stepSummary = (recipeInfo?.steps ?? []).map((s, idx) => `${idx + 1}. ${s}`).join("\n");
-      addMessage(
-        `[${title} 레시피 안내]\n\n■ 필요한 재료\n${lines.join("\n")}\n\n■ 조리 순서 안내\n\n${stepSummary}\n\n빠진 재료가 있나요? 없다면 "조리 시작"이라고 말씀해 주세요!`,
-        "assistant"
-      );
-    } 
-    // 2. 레시피도 없고 메시지도 아예 없을 때 (완전 초기 진입)
-    else if (!recipeInfo && messages.length === 0) {
-      addMessage("안녕하세요! 어떤 요리를 도와드릴까요?\n원하는 요리를 말하거나 입력해 보세요!", "assistant");
-    }
-  }
+  if (lines.length > 0) {
+    addMessage(
+      `${title} 재료 목록입니다:\n${lines.join("\n")}\n\n빠진 재료가 있으면 말해주세요!`,
 
+
+      "assistant"
+    );
+  } else {
+    addMessage(
+      `${title} 레시피의 재료 정보를 불러오지 못했어요.\n필요한 재료를 말로 알려주시면 도와드릴게요!`,
+      "assistant"
+    );
+  }
+}
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [initialRecipe, initialRecipeContext]);
 
@@ -463,7 +494,7 @@ useEffect(() => {
     if (!steps || steps.length === 0) return "요리 단계를 불러올 수 없어요.";
 
     const base = `[${i + 1}단계 / ${steps.length}단계]\n${steps[i]}`;
-    const guide = `\n\n완료하면 "다음 단계" 또는 "다 했어"이라고 말해주세요.`;
+    const guide = `\n\n완료하면 "다음"이라고 말해주세요.`;
 
     if (i === 0) return `좋습니다! 요리를 시작하겠습니다.\n\n${base}${guide}`;
     return `${base}${guide}`;
@@ -529,20 +560,14 @@ useEffect(() => {
     setOriginalTimerSeconds(null); 
   };
 
-  // 채팅 초기화
-  const resetChat = (opts?: { silent?: boolean }) => {
-  // 0) 음성/마이크 완전 정리(요리 완료 때도 같이 정리되게)
-  try {
-    clearSilenceTimer();
-    stopAllListening();
-  } catch (e) {
-    console.error(e);
-  }
-
+    // 채팅 초기화
+  const resetChat = () => {
+    suppressAutoSaveRef.current = true;
   // 1) 타이머 정리
   try {
     stopTimer();
   } catch (e) {
+    // stopTimer가 내부에서 예외 낼 가능성은 낮지만 안전하게
     console.error(e);
   }
   setPendingTimerSeconds(null);
@@ -559,17 +584,20 @@ useEffect(() => {
   setCompletedSteps([]);
   setIsFinished(false);
 
-  // 3) 대체재 흐름 초기화
+  // 3) 대체재 흐름 초기화(너 파일에 있는 상태들)
   setReplacementMode(null);
   setAwaitingReplacementChoice(false);
 
   // 4) 저장된 복원 데이터 삭제
-  sessionStorage.removeItem(CHAT_SAVE_KEY);
-
-  // 5) 안내 메시지 (silent면 안 찍음)
-  if (!opts?.silent) {
-    addMessage("채팅을 초기화했어요. 다시 요리를 말해줘!", "assistant");
-  }
+  const STORAGE_KEY = getStorageKey(sessionKey);
+  sessionStorage.removeItem(STORAGE_KEY);
+  // 5) 🔇 음성 / 듣기 / 웨이크워드 완전 종료
+  stopSpeaking();
+  setIsSpeaking(false);
+  stopAllListening();
+  setIsListening(false);
+  setIsWakeActive(false);
+  onNewChat?.();
   };
 
 
@@ -577,31 +605,13 @@ useEffect(() => {
   // ===============================
   // 🔥 핵심: 음성 입력도 텍스트 입력과 100% 동일 처리
   // ===============================
-    async function handleUserInput(rawText: string) {
-      const ingredientsChecked = ingredientsCheckedRef.current;
-      const cookingStarted = cookingStartedRef.current;
-      const currentStepIndex = currentStepIndexRef.current;
-      const recipeInfoLocal = recipeInfoRef.current;
-      const completedSteps = completedStepsRef.current;
-
+    async function handleUserInput(rawText: string, opts?: { skipAddUserMsg?: boolean }) {
       const text = normalizeText(rawText);
       if (!text) return;
 
-      addMessage(text, "user");
-
-      // [추가] "다음 단계" 강제 전환 로직 (서버 요청 전 가로채기)
-      if (cookingStarted && (text.includes("다음단계") || text.includes("다음 단계"))) {
-        const total = recipeInfoLocal?.steps?.length ?? 0;
-        const next = currentStepIndex + 1;
-        if (next < total) {
-          setCurrentStepIndex(next);
-          addMessage(buildStepMessage(next, recipeInfoLocal?.steps || []), "assistant");
-          handleStepStart((recipeInfoLocal?.steps ?? [])[next] || "");
-        } else {
-          setIsFinished(true);
-          addMessage("모든 단계가 끝났습니다! '요리 완료'를 눌러주세요.", "assistant");
-        }
-        return;
+      // skipAddUserMsg가 없을 때만 메시지 추가 (기존 로직 유지)
+      if (!opts?.skipAddUserMsg) {
+        addMessage(text, "user");
       }
 
       // ===============================
@@ -713,6 +723,13 @@ useEffect(() => {
         return;
       }
 
+      // 🔥 항상 ref에 들어있는 "최신 상태"를 기준으로 처리
+      const ingredientsChecked = ingredientsCheckedRef.current;
+      const cookingStarted = cookingStartedRef.current;
+      const currentStepIndex = currentStepIndexRef.current;
+      const recipeInfoLocal = recipeInfoRef.current;
+      const completedSteps = completedStepsRef.current;
+
 
     console.log(
       "%c[VOICE DEBUG] ===== 사용자 입력 처리 시작 =====",
@@ -727,60 +744,36 @@ useEffect(() => {
     console.log("[VOICE DEBUG] ======================================");
 
     //addMessage(text, "user");
-    const isReRequest = text.includes("다시") || text.includes("레시피") || text.includes("조리하고싶어");
 
-    if (!recipeInfoLocal || isReRequest) {
+    // ===== 1) 처음 레시피 생성 =====
+    if (!recipeInfoLocal) {
       try {
         const json = await askGPT_raw({ message: text, profile: userProfile });
         const info = JSON.parse(json);
 
-        // 1. AI의 거절 메시지(가드레일)나 단순 인사말이 있다면 그것만 출력
-        if (info.assistantMessage) {
-          addMessage(info.assistantMessage, "assistant");
-          
-          // ★ 중요: 거절 메시지가 왔고 실제 레시피 데이터가 없다면 여기서 중단 (빈 틀 출력 방지)
-          if (!info.steps || info.steps.length === 0) {
-            return; 
-          }
+        if (!info.steps || !info.fullIngredients) throw new Error();
+
+        if (!info.category) {
+          info.category = "AI 레시피";
         }
 
-        // 2. 실제 레시피 데이터(단계와 재료)가 있는 경우에만 상세 안내 출력
-        if (info.steps && info.steps.length > 0 && info.fullIngredients) {
-          if (isReRequest) {
-            setCookingStarted(false);
-            setIngredientsChecked(false);
-            setCurrentStepIndex(0);
-            setCompletedSteps([]);
-          }
-
-          setRecipeInfo(info);
-          
-          const fullStepsText = info.steps
-            .map((s: string, i: number) => `${i + 1}. ${s}`)
-            .join("\n");
-
-          const title = info.recipeName ?? "요청하신 요리";
-
-          addMessage(
-            `[${title} 레시피 안내]\n\n■ 필요한 재료\n${info.fullIngredients.join("\n")}\n\n■ 상세 조리 순서\n\n${fullStepsText}\n\n빠진 재료가 있나요? 없다면 "조리 시작"이라고 말씀해 주세요!`,
-            "assistant"
-          );
-        }
-      } catch (err) {
-        console.error("Recipe Creation Error:", err);
-        if (!text.includes("다시")) {
-          addMessage("레시피를 불러오지 못했어요. 요리 이름을 정확히 말씀해 주세요!", "assistant");
-        }
+        setRecipeInfo(info);
+        addMessage(
+          `${info.recipeName ?? ""} 재료 목록입니다:\n${info.fullIngredients.join(
+            "\n"
+          )}\n\n빠진 재료가 있으면 말해주세요!`,
+          "assistant"
+        );
+      } catch {
+        addMessage("레시피를 불러오지 못했어요!", "assistant");
       }
       return;
     }
 
-    if (!recipeInfoLocal) return;
-
     const nowRecipe =
-    recipeInfoLocal && typeof recipeInfoLocal === "string"
-      ? JSON.parse(recipeInfoLocal)
-      : recipeInfoLocal;
+      typeof recipeInfoLocal === "string"
+        ? JSON.parse(recipeInfoLocal)
+        : recipeInfoLocal;
 
     // ✅ 우선순위 0: 이미 요리 중일 때의 '다음/계속'은 무조건 "다음 단계"로 처리
     const compact = text.replace(/\s/g, "");
@@ -834,7 +827,7 @@ useEffect(() => {
         setCurrentStepIndex(0);
         setReplacementMode(null);
         setAwaitingReplacementChoice(false);
-        addMessage("모든 재료가 준비되었군요!\n조리를 시작하려면 \"시작하자\"라고 말씀해 주세요.", "assistant");
+        addMessage("모든 재료가 준비되었군요! 요리를 시작할까요?", "assistant");
         return;
       }
 
@@ -1016,9 +1009,26 @@ useEffect(() => {
     setTextInput("");
     setIsProcessing(true);
 
+    // 1. 사용자 질문을 먼저 화면에 추가 (순서 보장)
+    const userMsgId = `user-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, type: "user", text: clean, timestamp: new Date() }
+    ]);
+
+    // 2. 봇 타이핑(...) 메시지 추가
+    const typingId = `bot-typing-${Date.now()}`;
+    setMessages((prev) => [
+      ...prev,
+      { id: typingId, type: "assistant", text: "__typing__", timestamp: new Date() }
+    ]);
+
     try {
-      await handleUserInput(clean);
+      // { skipAddUserMsg: true }를 전달하여 중복 생성을 막습니다.
+      await handleUserInput(clean, { skipAddUserMsg: true }); 
     } finally {
+      // 생각 중 메시지 제거
+      setMessages((prev) => prev.filter(m => m.id !== typingId));
       setIsProcessing(false);
     }
   };
@@ -1095,7 +1105,7 @@ useEffect(() => {
 
   console.log("[wake] result:", text, "=>", normalized);
   // 여러 개 웨이크워드 허용
-  const wakeWords = ["두콩아"];
+  const wakeWords = ["두콩아","두콩","안녕"];
 
   if (wakeWords.some((word) => normalized.includes(word))) {
     console.log("[wake] 웨이크워드 감지 → command 모드로 전환");
@@ -1280,9 +1290,26 @@ useEffect(() => {
       setIsListening(false);
       commandRecognizerRef.current = null;
 
-      const trimmed = normalizeText(finalText);
-      if (trimmed.length > 0) {
-        await handleUserInput(trimmed);
+      const trimmedText = normalizeText(finalText); // 변수명 변경
+      if (trimmedText.length > 0) {
+        // 1. 사용자 메시지 추가
+        setMessages((prev) => [
+          ...prev,
+          { id: `user-voice-${Date.now()}`, type: "user", text: trimmedText, timestamp: new Date() }
+        ]);
+
+        // 2. 봇 생각 중 추가
+        const typingId = `bot-typing-${Date.now()}`;
+        setMessages((prev) => [
+          ...prev,
+          { id: typingId, type: "assistant", text: "__typing__", timestamp: new Date() }
+        ]);
+
+        try {
+          await handleUserInput(trimmedText, { skipAddUserMsg: true });
+        } finally {
+          setMessages((prev) => prev.filter(m => m.id !== typingId));
+        }
       }
 
       if (isWakeActiveRef.current && !hardErrorRef.current) {
@@ -1351,13 +1378,18 @@ useEffect(() => {
       toast.success("완료한 요리가 저장되었습니다!");
 
       // ✅ App.tsx에 완료 이벤트 전달 → 완료 목록 갱신
+      resetChat();
       onCookingComplete?.(recipeInfo);
-      resetChat({ silent: true });
+
     } catch (err) {
       console.error("❌ 완료 레시피 저장 실패:", err);
       toast.error("완료한 레시피 저장에 실패했습니다.");
     }
   };
+
+
+
+
 
   // ===============================
   // 진행률 계산
@@ -1368,13 +1400,6 @@ useEffect(() => {
       ? Math.round((completedCount / totalForProgress) * 100)
       : 0;
 
-  const renderHints = () => {
-    if (!recipeInfo) return ["김치볶음밥 알려줘", "된장찌개 레시피"];
-    if (!ingredientsChecked) return ["빠진 재료 없어", "재료 다 있어", "대파 대신 쪽파 돼?"];
-    if (!cookingStarted) return ["시작하자", "조리 시작해줘"];
-    if (cookingStarted && !isFinished) return ["다음", "다 했어", "다시 설명해줘"];
-    return [];
-  };
 
   // ===============================
   // UI
@@ -1396,9 +1421,8 @@ useEffect(() => {
                   {recipeInfo?.recipeName ?? recipeInfo?.name ?? "AI 음성 요리 도우미"}
                 </h2>
 
-                {/* AI 음성 요리 도우미 하단 글씨 */}
                 <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">
-                  원하는 요리에 대한 레시피를 안내받을 수 있어요! {"\n"}안내에 따라 요리보조를 시작해보세요!
+                  원하는 요리를 말하거나 입력해보세요!{"\n"}예: "김치볶음밥 알려줘"
                 </p>
 
                 {cookingStarted && recipeInfo && (
@@ -1474,7 +1498,7 @@ useEffect(() => {
                   {isListening
                     ? "지금 말씀하세요..."
                     : isWakeActive
-                    ? `두콩아"이라고 불러보세요`
+                    ? `"두콩아"이라고 불러보세요`
                     : "자동 듣기 켜기"}
                 </span>
               </div>
@@ -1510,7 +1534,8 @@ useEffect(() => {
                         </div>
                         <div className="max-w-[75%]">
                           <div className="inline-block rounded-2xl rounded-bl-sm bg-white border border-gray-100 px-3 py-2 text-sm shadow-sm whitespace-pre-line">
-                            {m.text}
+                            {/* 수정: text가 __typing__이면 애니메이션 출력 */}
+                            {m.text === "__typing__" ? <TypingDots /> : m.text}
                           </div>
                         </div>
                       </>
@@ -1535,7 +1560,7 @@ useEffect(() => {
         </Card>
 
         {/* 입력 영역 */}
-<div className="mt-4 flex flex-col gap-3">
+        <div className="mt-4 flex flex-col gap-3">
   <div className="flex items-center gap-2">
     <Input
       value={textInput}
@@ -1563,6 +1588,7 @@ useEffect(() => {
         말하기 멈추기
       </Button>
     </div>
+
   )}
 
   {/* ✅ 채팅 초기화 버튼 */}
