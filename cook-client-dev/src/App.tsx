@@ -1012,7 +1012,14 @@ const handleCompletedRecipeClick = async (recipe: CompletedRecipe) => {
             initialRecipe={initialAiRecipe} 
             onCookingComplete={handleCookingCompleteFromAI}
             sessionKey={voiceSessionKey}
-            onNewChat={() => setVoiceSessionKey((k) => k + 1)}
+            onNewChat={() => {
+            // ✅ 1) 무조건 새 채팅 세션
+            setVoiceSessionKey((k) => k + 1);
+
+            // ✅ 2) 레시피 컨텍스트도 비우기 (← 이게 핵심)
+            setSelectedFullRecipe(null);
+            setInitialAiRecipe(null);
+          }}
           />
         )}
 
