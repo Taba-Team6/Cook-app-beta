@@ -124,7 +124,7 @@ export function TopNavBar({
                     fontSize: "1.1rem",
                   }}
                 >
-                  쿠킹 메이트
+                  쿠킹메이트
                 </span>
               </div>
             </button>
@@ -162,7 +162,7 @@ export function TopNavBar({
                 <div className="flex items-center gap-2 p-2">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm">{userName}</p>
-                    <p className="text-xs text-muted-foreground">쿠킹 메이트</p>
+                    <p className="text-xs text-muted-foreground">쿠킹메이트</p>
                   </div>
                 </div>
                 <DropdownMenuSeparator />

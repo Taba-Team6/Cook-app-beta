@@ -18,7 +18,7 @@ const onboardingSlides = [
     id: 1,
     type: "welcome",
     title: "환영합니다!",
-    subtitle: "쿠킹 메이트",
+    subtitle: "쿠킹메이트",
     descriptionTop: "요리를 시작하는 순간부터 끝까지,\nAI가 당신의 요리를 편하게 도와드려요",
     descriptionBottom: "검색·음성가이드·재료 관리까지\n한 곳에서 사용할 수 있어요"
   },

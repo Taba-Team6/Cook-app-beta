@@ -273,7 +273,7 @@ export function Auth({ onAuthSuccess }: AuthProps) {
             fontWeight: 700,
           }}
         >
-          쿠킹 메이트
+          쿠킹메이트
         </h1>
 
         <p className="text-muted-foreground">
